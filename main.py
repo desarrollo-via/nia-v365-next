@@ -699,7 +699,7 @@ def _tiene_campos_tecnicos_mensaje(texto: str) -> bool:
     campos = extraer_campos_tecnicos(texto)
     if campos:
         return True
-    return _cuenta_parametros_tecnicos_generales(texto) >= 1
+    return _cuenta_parametros_tecnicos_generales(texto) >= 2
 
 
 def _tiene_ancla_producto(texto: str) -> bool:
