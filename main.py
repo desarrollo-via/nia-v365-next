@@ -3772,7 +3772,10 @@ def _respuesta_siguiente_dato_comercial(
         # Punto final de la etapa de cotización.
         # No pedimos empresa, NIT ni RUT aquí.
         return (
-            f"Perfecto, {nombre}, ya quedé con tu solicitud. En breve recibirás la cotización en tu correo.",
+            "Perfecto. Registré tu solicitud con los productos y "
+            "cantidades indicados. La cotización aún no ha sido "
+            "emitida ni enviada. Un asesor debe validarla y "
+            "continuar el proceso.",
             "cotizacion_lista",
         )
 
@@ -5496,13 +5499,17 @@ async def procesar_turno(
 
         if nombre_cliente:
             respuesta_segura = (
-                f"Perfecto, {nombre_cliente}, ya quedé con tu solicitud. "
-                "En breve recibirás la cotización en tu correo."
+                f"Perfecto, {nombre_cliente}. Registré tu solicitud "
+                "con los productos y cantidades indicados. "
+                "La cotización aún no ha sido emitida ni enviada. "
+                "Un asesor debe validarla y continuar el proceso."
             )
         else:
             respuesta_segura = (
-                "Perfecto, ya quedé con tu solicitud. "
-                "En breve recibirás la cotización en tu correo."
+                "Perfecto. Registré tu solicitud con los productos "
+                "y cantidades indicados. La cotización aún no ha sido "
+                "emitida ni enviada. Un asesor debe validarla y "
+                "continuar el proceso."
             )
 
     if respuesta_segura:
