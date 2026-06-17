@@ -3162,14 +3162,12 @@ async def _buscar_y_responder_hibrido(
         mensaje[:100],
     )
 
-    if palabra:
-        res = await buscar_con_descubrimiento_producto(
-            palabra_clave=palabra,
-            nivel_1=nivel_1,
-            respuestas_tecnicas=respuestas_tecnicas,
-        )
-    else:
-        res = await buscar_en_catalogo(mensaje)
+    res = await buscar_con_descubrimiento_producto(
+        palabra_clave=palabra or "",
+        nivel_1=nivel_1,
+        respuestas_tecnicas=respuestas_tecnicas,
+        texto_original=mensaje,
+    )
 
     ctx = {
         "texto_original": mensaje,
