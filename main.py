@@ -651,8 +651,10 @@ def detectar_identificador(texto: str):
     m = CODIGO_RE.search(texto_limpio)
     if m:
         codigo = m.group(1)
-        if _es_mensaje_esencialmente_identificador(texto_limpio, codigo):
-            return "codigo", codigo
+        # Los códigos VIA de seis dígitos tienen prioridad aunque
+        # aparezcan dentro de una frase natural, por ejemplo:
+        # "Necesito información del producto 107009".
+        return "codigo", codigo
 
     m = CODIGO_P_RE.search(texto_limpio)
     if m:
@@ -3498,6 +3500,77 @@ def _asignar_cantidad_ultimo_producto(productos_acumulados: list, cantidad: int)
     productos_acumulados[-1]["cantidad"] = cantidad
 
 
+_ACCIONES_UI_NO_NOMBRE = {
+    "cotiza",
+    "cotizar",
+    "cotizar con esto",
+    "con esto",
+    "agregar",
+    "agregar otro producto",
+    "agregar_otro",
+    "otro producto",
+}
+
+
+def _es_nombre_control_invalido(valor: Optional[str]) -> bool:
+    """
+    Rechaza valores que representan acciones de interfaz o comandos
+    conversacionales, aunque un parser intermedio cambie mayúsculas,
+    elimine conectores o reemplace guiones bajos.
+
+    La regla se basa en intención y en la raíz del primer verbo,
+    no en una única frase literal.
+    """
+    normalizado = _normalizar_intencion(
+        str(valor or "")
+    ).replace("_", " ").strip()
+
+    if not normalizado:
+        return False
+
+    if normalizado in _ACCIONES_UI_NO_NOMBRE:
+        return True
+
+    tokens = re.findall(r"[a-z0-9]+", normalizado)
+
+    if not tokens:
+        return False
+
+    primer_token = tokens[0]
+
+    prefijos_accion = (
+        "agreg",
+        "anad",
+        "cotiz",
+        "compr",
+        "busc",
+        "consult",
+        "continu",
+        "confirm",
+        "cancel",
+        "finaliz",
+        "termin",
+        "volv",
+        "envi",
+        "seleccion",
+        "escog",
+    )
+
+    return any(
+        primer_token.startswith(prefijo)
+        for prefijo in prefijos_accion
+    )
+
+
+def _sanitizar_cliente_control(cliente: dict) -> dict:
+    """Elimina nombres contaminados por acciones de interfaz."""
+    limpio = dict(cliente or {})
+
+    if _es_nombre_control_invalido(limpio.get("nombre")):
+        limpio.pop("nombre", None)
+
+    return limpio
+
 def _parece_nombre_simple(texto: str) -> Optional[str]:
     """
     Captura nombres escritos de forma directa, por ejemplo:
@@ -3516,6 +3589,9 @@ def _parece_nombre_simple(texto: str) -> Optional[str]:
         return None
 
     t = _normalizar_intencion(limpio)
+
+    if _es_nombre_control_invalido(limpio):
+        return None
 
     bloqueados = PALABRAS_SALUDO | PALABRAS_FIN | {
         "si",
@@ -3711,8 +3787,14 @@ def _capturar_dato_comercial_por_etapa(mensaje: str, cliente: dict, etapa: str) 
             cliente["email"] = datos_contacto["email"]
             logger.debug("Email capturado por parser de contacto: %s", cliente["email"])
 
-        if not cliente.get("nombre") and datos_contacto.get("nombre"):
-            cliente["nombre"] = datos_contacto["nombre"]
+        nombre_contacto = datos_contacto.get("nombre")
+
+        if (
+            not cliente.get("nombre")
+            and nombre_contacto
+            and not _es_nombre_control_invalido(nombre_contacto)
+        ):
+            cliente["nombre"] = nombre_contacto
             logger.debug("Nombre capturado por parser de contacto: %s", cliente["nombre"])
 
         # Fallback para el caso simple:
@@ -3735,7 +3817,8 @@ def _capturar_dato_comercial_por_etapa(mensaje: str, cliente: dict, etapa: str) 
             cliente["rut"] = rut
             logger.debug("RUT capturado/actualizado por parser de RUT: %s", rut)
 
-    return cliente
+    # Última barrera: elimina acciones de interfaz que hayan entrado por cualquier parser.
+    return _sanitizar_cliente_control(cliente)
 
 def _respuesta_siguiente_dato_comercial(
     cliente: dict,
@@ -4743,6 +4826,9 @@ async def procesar_turno(
         **cliente_permanente,
         **cliente_sesion,
     }
+
+    # Corrige datos históricos contaminados por botones de acción.
+    cliente = _sanitizar_cliente_control(cliente)
 
     productos_acumulados = session.get("productos_acumulados", [])
 
