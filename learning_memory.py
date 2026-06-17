@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import contextvars
 import logging
+import os
 from datetime import datetime, timezone
 from typing import Any, Optional
 
@@ -21,7 +22,7 @@ from memory import get_clientes_collection, get_db
 
 logger = logging.getLogger(__name__)
 
-APRENDIZAJE_COLLECTION = "nia_v365_aprendizaje"
+APRENDIZAJE_COLLECTION = os.getenv("MONGO_LEARNING_COLLECTION", "nia_nueva_aprendizaje")
 MAX_EVENTOS_POR_CLAVE = 500
 MAX_HISTORIAL_SLICE = 30
 MAX_CODIGOS_RESUMEN = 100

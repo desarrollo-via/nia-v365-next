@@ -12,8 +12,8 @@ Base de datos:
 - MONGO_DB=nia
 
 Colecciones usadas:
-- Sesiones temporales: nia_v365_sessions
-- Clientes permanentes: nia_v365_clientes
+- Sesiones temporales: nia_nueva_sessions
+- Clientes permanentes: nia_nueva_clientes
 
 TTL sesiones:
 - 8 días desde updated_at.
@@ -50,10 +50,10 @@ MONGO_URI = os.getenv("MONGO_URI")
 MONGO_DB = os.getenv("MONGO_DB", "nia")
 
 # Colección propia para NIA v365.
-SESSIONS_COLLECTION = os.getenv("MONGO_SESSIONS_COLLECTION", "nia_v365_sessions")
+SESSIONS_COLLECTION = os.getenv("MONGO_SESSIONS_COLLECTION", "nia_nueva_sessions")
 
 # Nueva colección permanente de clientes.
-CLIENTES_COLLECTION = os.getenv("MONGO_CLIENTES_COLLECTION", "nia_v365_clientes")
+CLIENTES_COLLECTION = os.getenv("MONGO_CLIENTES_COLLECTION", "nia_nueva_clientes")
 
 TTL_SEGUNDOS = 60 * 60 * 24 * 8  # 8 días
 MAX_TURNOS = 40
@@ -84,13 +84,13 @@ def _validar_configuracion_mongo() -> None:
     if not SESSIONS_COLLECTION:
         raise RuntimeError(
             "Falta MONGO_SESSIONS_COLLECTION o está vacío. "
-            "Usa por defecto: MONGO_SESSIONS_COLLECTION=nia_v365_sessions."
+            "Usa por defecto: MONGO_SESSIONS_COLLECTION=nia_nueva_sessions."
         )
 
     if not CLIENTES_COLLECTION:
         raise RuntimeError(
             "Falta MONGO_CLIENTES_COLLECTION o está vacío. "
-            "Usa por defecto: MONGO_CLIENTES_COLLECTION=nia_v365_clientes."
+            "Usa por defecto: MONGO_CLIENTES_COLLECTION=nia_nueva_clientes."
         )
 
 

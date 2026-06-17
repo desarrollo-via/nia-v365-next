@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import logging
 import re
+import unicodedata
 from collections import Counter, defaultdict
 from typing import Optional
 
@@ -128,7 +129,14 @@ EXTRACTORES_ATRIBUTOS: list[tuple[str, re.Pattern]] = [
 def _normalizar_texto(valor: str) -> str:
     if not valor:
         return ""
+
     texto = str(valor).lower().strip()
+    texto = unicodedata.normalize("NFD", texto)
+    texto = "".join(
+        caracter
+        for caracter in texto
+        if unicodedata.category(caracter) != "Mn"
+    )
     texto = re.sub(r"\s+", " ", texto)
     return texto
 
