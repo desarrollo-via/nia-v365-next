@@ -254,10 +254,60 @@ async def whatsapp_verify(
 # Regex / intención básica
 # ─────────────────────────────────────────────────────────────
 
-CODIGO_RE = re.compile(r"\b(\d{6})\b")
-CODIGO_P_RE = re.compile(r"\b(P(?=[A-Z0-9]*\d)[A-Z0-9]{6})\b", re.IGNORECASE)
-REF_RE = re.compile(r"\b(P\d{3,}|[A-Z]{2,4}\d{2,}[A-Z0-9]*)\b", re.IGNORECASE)
-EMAIL_RE = re.compile(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}")
+# Código interno numérico de seis dígitos.
+#
+# Los lookarounds evitan extraer seis dígitos desde el interior
+# de un NIT, teléfono u otro número más largo.
+CODIGO_RE = re.compile(r"(?<!\d)(\d{6})(?!\d)")
+
+
+# Referencias comerciales con prefijo P.
+#
+# Formas válidas:
+# - P350279
+# - p350279
+# - P-350279
+# - P 350279
+# - P#350279
+# - P:350279
+REFERENCIA_P_RE = re.compile(
+    r"(?<![A-Z0-9])P[\s#:\-._/]*([0-9]{3,})(?![A-Z0-9])",
+    re.IGNORECASE,
+)
+
+
+# Referencia alfanumérica compacta.
+# No acepta espacios entre letras y números. Esto evita interpretar
+# frases naturales como "mi NIT es 900123456" como una referencia ES900123456.
+REFERENCIA_ALFANUMERICA_COMPACTA_RE = re.compile(
+    r"(?<![A-Z0-9])([A-Z]{1,4})[-._/]*([0-9]{3,}[A-Z0-9]*)(?![A-Z0-9])",
+    re.IGNORECASE,
+)
+
+
+# Referencia alfanumérica separada, pero únicamente cuando el cliente
+# utiliza una palabra que declara explícitamente el identificador.
+
+REFERENCIA_ALFANUMERICA_EXPLICITA_RE = re.compile(
+    # Palabra que declara que lo siguiente es un identificador.
+    r"\b(?:ref(?:erencia)?|modelo|c[oó]digo|parte|part\s*number|pn|p/n)"
+
+    # Conectores naturales opcionales usados por los clientes:
+
+    r"(?:\s+(?:es|n[uú]mero|num(?:ero)?|no\.?))?"
+
+    # Separadores opcionales.
+    r"\s*[:#\-]?\s*"
+
+    # Prefijo alfabético + cuerpo numérico o alfanumérico.
+    r"([A-Z]{1,4})[\s#:\-._/]*([0-9]{3,}[A-Z0-9]*)(?![A-Z0-9])",
+    re.IGNORECASE,
+)
+
+EMAIL_RE = re.compile(
+    r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}"
+)
+
 NIT_RE = re.compile(r"\b(\d{8,10}-?\d?)\b")
 
 # ============================================================
@@ -492,7 +542,7 @@ Clasifica el mensaje.
             "confianza": 0.0,
             "razon": "fallback por error del clasificador",
         }
-        
+
 PALABRAS_SALUDO = {"hola", "buenas", "buenos", "buen", "hi", "hello", "hey", "saludos"}
 PALABRAS_MAS = {"también", "otro", "otra", "más", "adicional", "y además", "necesito más", "y también"}
 PALABRAS_FIN = {"solo eso", "con eso", "es todo", "nada más", "eso es todo", "listo", "ok cotiza", "cotiza"}
@@ -637,35 +687,87 @@ def _parece_nombre_producto_modelo(texto: str) -> bool:
 
 def detectar_identificador(texto: str):
     """
-    Detecta código exacto VIA:
-    - 6 dígitos numéricos
-    - referencia de 7 caracteres que empieza por P
-    - otras referencias alfanuméricas tipo Pxxxxx
+    Detecta un identificador explícito dentro de un mensaje natural.
 
-    No extrae modelos cortos (C400) dentro de nombres de producto.
+    Prioridad:
+    1. Referencia comercial con prefijo P.
+    2. Código numérico exacto de seis dígitos.
+    3. Referencia alfanumérica general.
     """
-    texto_limpio = (texto or "").strip()
-    if not texto_limpio:
+    if not texto:
         return None, None
 
-    m = CODIGO_RE.search(texto_limpio)
-    if m:
-        codigo = m.group(1)
-        # Los códigos VIA de seis dígitos tienen prioridad aunque
-        # aparezcan dentro de una frase natural, por ejemplo:
-        # "Necesito información del producto 107009".
+    texto = str(texto).strip()
+
+    if not texto:
+        return None, None
+
+    # ------------------------------------------------------------
+    # 1. Referencia con prefijo P
+    # ------------------------------------------------------------
+    # Se evalúa antes del código numérico porque P350279 contiene
+    # seis dígitos, pero comercialmente es una referencia completa.
+    match_p = REFERENCIA_P_RE.search(texto)
+
+    if match_p:
+        numero = match_p.group(1)
+        referencia = f"P{numero}".upper()
+
+        logger.debug(
+            "Referencia P detectada en mensaje natural: %s",
+            referencia,
+        )
+
+        return "referencia", referencia
+
+    # ------------------------------------------------------------
+    # 2. Código exacto de seis dígitos
+    # ------------------------------------------------------------
+    match_codigo = CODIGO_RE.search(texto)
+
+    if match_codigo:
+        codigo = match_codigo.group(1)
+
+        logger.debug(
+            "Código numérico detectado en mensaje natural: %s",
+            codigo,
+        )
+
         return "codigo", codigo
 
-    m = CODIGO_P_RE.search(texto_limpio)
-    if m:
-        referencia = m.group(1).upper()
-        if _es_mensaje_esencialmente_identificador(texto_limpio, referencia):
-            return "referencia", referencia
+    # ------------------------------------------------------------
+    # 3. Referencia alfanumérica general
+    # ------------------------------------------------------------
+    # Primero buscamos referencias declaradas explícitamente:
+    match_ref = REFERENCIA_ALFANUMERICA_EXPLICITA_RE.search(texto)
 
-    m = REF_RE.search(texto_limpio)
-    if m:
-        referencia = m.group(1).upper()
-        if _es_mensaje_esencialmente_identificador(texto_limpio, referencia):
+    # Si no existe una palabra declarativa, solo aceptamos formatos compactos
+    # porque normalmente pertenece a una frase natural.
+    if not match_ref:
+        match_ref = REFERENCIA_ALFANUMERICA_COMPACTA_RE.search(texto)
+
+    if match_ref:
+        prefijo = match_ref.group(1).upper()
+        cuerpo = match_ref.group(2).upper()
+
+        # Prefijos administrativos que no representan productos.
+        prefijos_bloqueados = {
+            "NIT",
+            "RUT",
+            "TEL",
+            "CEL",
+            "CC",
+            "ID",
+        }
+
+        if prefijo not in prefijos_bloqueados:
+            referencia = f"{prefijo}{cuerpo}"
+
+            logger.debug(
+                "Referencia alfanumérica detectada: %s",
+                referencia,
+            )
+
             return "referencia", referencia
 
     return None, None
@@ -3869,7 +3971,7 @@ def _respuesta_siguiente_dato_comercial(
     # - vendedor confirmó que envió la cotización;
     # - cliente confirmó que cumple técnicamente.
     #==============================================================
-    
+
     if etapa_objetivo == "proforma":
         if not cliente.get("empresa"):
             return (
@@ -4142,7 +4244,7 @@ def _manejar_estado_comercial_prioritario(
     cliente = dict(cliente or {})
     necesidad_ctx = dict(necesidad_ctx or {})
     productos_acumulados = productos_acumulados or []
-    
+
     clasificacion = clasificacion or {}
     tipo_mensaje = clasificacion.get("tipo")
 
@@ -4299,7 +4401,7 @@ def _manejar_estado_comercial_prioritario(
                     session_id=session_id,
                 ),
             }
-            
+
         if _es_confirmacion_negativa(mensaje):
             return {
                 "handled": True,
@@ -4334,7 +4436,7 @@ def _manejar_estado_comercial_prioritario(
             },
             "productos_acumulados": productos_acumulados,
         }
-        
+
     # ============================================================
     # Proforma lista, esperando confirmación externa
     # ============================================================
@@ -4705,7 +4807,7 @@ async def _persistir_cliente_permanente(
             phone_id,
             e,
         )
-        
+
 async def _guardar_y_responder_turno(
     session_id: str,
     phone_id: Optional[str],
@@ -4741,7 +4843,7 @@ async def _guardar_y_responder_turno(
     }
 
     await _persistir_cliente_permanente(phone_id, cliente)
-    
+
     await save_session(
         session_id=session_id,
         phone_id=phone_id,
@@ -4764,7 +4866,7 @@ async def _guardar_y_responder_turno(
         "items_resultado": items_resultado or None,
         "cliente": cliente or None,
     }
-    
+
 # ─────────────────────────────────────────────────────────────
 # Núcleo conversacional
 # ─────────────────────────────────────────────────────────────
@@ -4905,9 +5007,21 @@ async def procesar_turno(
     nueva_etapa = etapa
     items_resultado = []
 
+    # ------------------------------------------------------------
+    # Identificador explícito con prioridad global
+    # ------------------------------------------------------------
+    # Un código o referencia escrito por el cliente debe tener prioridad
+    # sobre preguntas técnicas pendientes o estados de descubrimiento.
+
+    tipo_identificador = None
+    valor_identificador = None
+
+    if mensaje.strip() and not (archivo_bytes and archivo_nombre):
+        tipo_identificador, valor_identificador = detectar_identificador(mensaje)
+
     if mensaje.strip():
         cliente = extraer_datos_cliente(mensaje, cliente)
-    
+
     # ------------------------------------------------------------
     # Clasificación de intención — Cotización V
     # ------------------------------------------------------------
@@ -4921,13 +5035,17 @@ async def procesar_turno(
         clasificacion.get("confianza"),
         clasificacion.get("razon"),
     )
-        
+
     # ══════════════════════════════════════════════════════
     # PRIORIDAD ABSOLUTA: ESTADO COMERCIAL
     # ══════════════════════════════════════════════════════
     # Si el turno pertenece a una etapa comercial, se resuelve aquí
     # y se retorna inmediatamente. No catálogo. No LLM. No reglas posteriores.
-    if mensaje.strip() and not (archivo_bytes and archivo_nombre):
+    if (
+        mensaje.strip()
+        and not (archivo_bytes and archivo_nombre)
+        and not tipo_identificador
+    ):
         comercial = _manejar_estado_comercial_prioritario(
             etapa=etapa,
             mensaje=mensaje,
@@ -5063,15 +5181,42 @@ async def procesar_turno(
 
     elif mensaje.strip():
         msg_lower = mensaje.lower().strip()
+        estado_comercial_resuelto = False
 
-        # PRIORIDAD: flujo descubrimiento producto (NIVEL_1 → DESCRIPCION_LARGA)
-        if etapa == "descubrimiento" and _en_flujo_corta_larga(necesidad_ctx):
+        # El estado comercial se resuelve antes de entrar al modo texto.
+        # Si llegó hasta aquí, este turno puede pasar a archivo/catálogo/LLM.
+
+        # ============================================================
+        # PRIORIDAD 1: código o referencia explícita
+        # ============================================================
+        # Esta rama se ejecuta antes de:
+        # - respuestas a preguntas técnicas;
+        # - descubrimiento;
+        # - búsquedas semánticas;
+        # - generación de preguntas con OpenAI.
+
+        if tipo_identificador and valor_identificador:
+            logger.info(
+                "Procesando identificador explícito con prioridad: %s=%s",
+                tipo_identificador,
+                valor_identificador,
+            )
+
+            res = await rama_codigo(
+                valor=valor_identificador,
+                tipo=tipo_identificador,
+            )
+
             contexto_extra, nueva_etapa, necesidad_ctx = (
-                await _continuar_descubrimiento_corta_larga(
-                    necesidad_ctx=necesidad_ctx,
-                    mensaje=mensaje,
+                construir_respuesta_desde_resultado(
+                    res=res,
                     cliente=cliente,
                     productos_acumulados=productos_acumulados,
+                    desde="identificador_explicito",
+                    necesidad_ctx_base={
+                        "texto_original": mensaje,
+                        "query_evaluada": valor_identificador,
+                    },
                 )
             )
 
@@ -5504,7 +5649,7 @@ async def procesar_turno(
                             "Para identificar el producto correcto, necesito un dato:",
                         )
 
-       
+
         # Intenciones comerciales transversales
         # Solo se aplican si el estado comercial prioritario no resolvió el turno.
         # Esto evita que datos como cantidad, nombre, empresa o NIT sean tratados
@@ -5628,7 +5773,7 @@ async def procesar_turno(
         "content": respuesta,
         "ts": datetime.utcnow().isoformat(),
     }
-    
+
     await _persistir_cliente_permanente(phone_id, cliente)
 
     await save_session(
@@ -5645,7 +5790,7 @@ async def procesar_turno(
         proforma_recibida=proforma_recibida,
         archivo_proforma=archivo_proforma,
     )
-    
+
 
     return {
         "respuesta": respuesta,
