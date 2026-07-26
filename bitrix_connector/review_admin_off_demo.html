@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>NIA · Review Admin · Fixture off</title>
+  <style>
+    :root{color-scheme:dark;--bg:#06121c;--panel:#10212d;--line:#294252;
+      --text:#e8f2f8;--muted:#91a7b7;--blue:#58a6ff;--safe:#50d49b;--warn:#ffc857}
+    *{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 15% 0,#183551,transparent 34%),var(--bg);
+      color:var(--text);font:15px/1.5 system-ui,sans-serif}main{max-width:1180px;margin:auto;padding:42px 22px 70px}
+    header,.toolbar{display:flex;align-items:center;justify-content:space-between;gap:16px}
+    h1{font-size:42px;line-height:1;margin:5px 0 8px}h2{margin:0 0 8px}.eyebrow{color:var(--blue);
+      font-weight:800;letter-spacing:.13em;margin:0}.panel{margin:18px 0;padding:20px;background:var(--panel);
+      border:1px solid var(--line);border-radius:16px}.banner{padding:13px 16px;border:1px solid #7c6424;
+      background:#2b250e;color:#ffe298;border-radius:11px;font-weight:800;text-align:center}
+    .badge{display:inline-block;border:1px solid var(--line);border-radius:999px;padding:6px 10px;background:#091923}
+    .safe{color:var(--safe)}.warn{color:var(--warn)}.muted{color:var(--muted)}
+    select,button{font:inherit;border:1px solid var(--line);border-radius:9px;padding:10px 12px;background:#091923;color:var(--text)}
+    button:disabled{color:#778895}.badges{display:flex;flex-wrap:wrap;gap:8px;margin:16px 0}
+    .access{display:grid;grid-template-columns:1fr auto;gap:14px;align-items:center;border-color:#287a58}
+    .access strong,.access small{display:block}.access small{color:var(--muted)}.conversation{display:grid;gap:10px;margin:18px 0}
+    .access-form{display:flex;gap:8px;margin-top:12px}.access-form input{min-width:300px}
+    .bubble{max-width:78%;padding:13px 15px;border-radius:14px;background:#193751}.bubble.nia{justify-self:end;background:#164332}
+    .bubble small{display:block;color:var(--muted);margin-bottom:4px}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+    article{padding:16px;background:#0a1924;border:1px solid var(--line);border-radius:13px}h3{margin:0 0 10px;font-size:15px}
+    pre{margin:0;padding:12px;background:#06111a;border-radius:9px;overflow:auto;max-height:300px;
+      font:12px/1.5 Consolas,monospace;color:#c9dff0;white-space:pre-wrap}.hash{word-break:break-all;color:var(--muted);font:11px Consolas,monospace}
+    .actions{margin-top:16px;padding:16px;border:1px solid var(--line);border-radius:13px}.actions p{color:var(--warn);margin-bottom:0}
+    footer{text-align:center;color:var(--muted);margin-top:22px}@media(max-width:760px){header,.toolbar{align-items:stretch;flex-direction:column}
+      .grid,.access{grid-template-columns:1fr}.bubble{max-width:94%}}
+  </style>
+</head>
+<body data-visual-fixture="true" data-real-mode="off" data-network="none">
+<main>
+  <header><div><p class="eyebrow">BITRIX_CONNECTOR</p><h1>Review Admin</h1>
+    <p>Revisión humana same-origin · credenciales objetivo solo en servidor.</p></div>
+    <span class="badge safe">Sesión administrativa activa</span></header>
+  <div class="banner">MODO REAL OFF · ACTIVACIÓN BLOQUEADA · SIN SERVICIOS EXTERNOS</div>
+
+  <section class="panel access">
+    <div><h2>Acceso controlado</h2><strong>Código bootstrap consumido correctamente</strong>
+      <small>El valor no se conserva en HTML, cookie, almacenamiento del navegador ni captura.</small>
+      <div class="access-form"><input type="password" aria-label="Código bootstrap" placeholder="Código de 32+ caracteres" disabled>
+        <button type="button" disabled>Código ya consumido</button></div></div>
+    <span class="badge safe">controlled-reviewer</span>
+  </section>
+
+  <section class="panel">
+    <div class="toolbar"><div><h2>Eventos para revisión</h2>
+      <p class="muted">FIXTURE LOCAL · SOLO LECTURA · NINGUNA NEGOCIACIÓN REAL</p></div>
+      <div><select aria-label="Evento"><option>chat-controlado-001 · shadowed</option></select>
+        <button type="button">Actualizar</button><button type="button">Cerrar sesión</button></div></div>
+    <div class="badges"><span class="badge safe">effective_mode = off</span>
+      <span class="badge safe">activation_locked = true</span>
+      <span class="badge safe">external_calls = false</span>
+      <span class="badge safe">Bitrix escritos = 0</span>
+      <span class="badge warn">Acciones bloqueadas</span></div>
+
+    <div class="conversation">
+      <div class="bubble"><small>Cliente · mensaje normalizado</small>Necesito una bomba centrífuga para agua limpia, 10 HP.</div>
+      <div class="bubble nia"><small>NIA Next · respuesta auditada de fixture</small>Para recomendar la bomba correcta,
+        ¿qué caudal y altura dinámica total necesitas?</div>
+    </div>
+
+    <div class="grid">
+      <article><h3>1. Evento original redactado</h3><pre>{
+  "event": "ONIMBOTV2MESSAGEADD",
+  "data[message][id]": "9001",
+  "data[message][chatId]": "73",
+  "data[message][text]": "Necesito una bomba centrífuga para agua limpia, 10 HP.",
+  "data[chat][dialogId]": "chat-controlado-001",
+  "auth[domain]": "demo.bitrix24.invalid",
+  "auth[member_id]": "member-demo",
+  "auth[application_token]": "[REDACTED]"
+}</pre></article>
+      <article><h3>2. Mensaje normalizado</h3><pre>{
+  "event": "ONIMBOTV2MESSAGEADD",
+  "message_id": 9001,
+  "chat_id": 73,
+  "dialog_id": "chat-controlado-001",
+  "author_id": 27,
+  "member_id": "member-demo",
+  "text": "Necesito una bomba centrífuga para agua limpia, 10 HP."
+}</pre></article>
+      <article><h3>3. Manifiesto de adjuntos</h3><pre>{
+  "transformations": [
+    "horizontal_whitespace_collapsed",
+    "outer_whitespace_trimmed"
+  ],
+  "signals": [],
+  "blocking_reasons": [],
+  "attachment_status": "not_present",
+  "attachment_count": 0
+}</pre></article>
+      <article><h3>4. Payload exacto para NIA</h3><pre>{
+  "session_id": "bitrix:member-demo:chat-controlado-001",
+  "mensaje": "Necesito una bomba centrífuga para agua limpia, 10 HP."
+}</pre><p class="hash">SHA-256:
+fd706eda15e31f76071f53434b19dec3da1f72a9306ff8e07bd84ddaafbe7b05</p></article>
+      <article><h3>5. Respuesta exacta de NIA</h3><pre>{
+  "respuesta": "Para recomendar la bomba correcta, ¿qué caudal y altura dinámica total necesitas?",
+  "etapa": "descubrimiento",
+  "items_resultado": [],
+  "cliente": {
+    "kind": "fixture",
+    "id": "contacto-controlado"
+  }
+}</pre></article>
+      <article><h3>6. Salida exacta hacia Bitrix</h3><pre>{
+  "botId": 456,
+  "dialogId": "chat-controlado-001",
+  "fields": {
+    "message": "Para recomendar la bomba correcta, ¿qué caudal y altura dinámica total necesitas?"
+  }
+}</pre><p class="hash">SHA-256:
+3dc29a7ebbcfaa077388561a1769456c6b594dd89a7765e0230abcefd03ccc17</p></article>
+    </div>
+    <div class="actions"><h2>Decisiones humanas</h2>
+      <button disabled>Aprobar entrada</button><button disabled>Rechazar entrada</button>
+      <button disabled>Aprobar salida</button><button disabled>Rechazar salida</button>
+      <p>Deshabilitadas: esta captura usa una fixture GET y el modo operativo real permanece en off.</p></div>
+  </section>
+  <footer>Evento d7bcdc33da5ae4d041db2bd85a472a1965ab29b4676bf8f2c7bf2b1229a08c1a ·
+    fixture local · ninguna llamada real</footer>
+</main>
+</body>
+</html>

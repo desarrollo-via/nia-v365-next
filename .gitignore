@@ -15,6 +15,12 @@ __pycache__/
 *.log
 nia.log
 
+# Runtime efímero del Review Admin local
+/.review-admin-runtime/
+
+# Runtime efímero de instalación OAuth
+/.oauth-install-runtime/
+
 # VS Code
 .vscode/
 

@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>NIA · Review Decision Lab</title>
+  <style>
+    :root{color-scheme:dark;--bg:#07111a;--panel:#10202c;--panel2:#0b1822;--line:#29404f;--text:#edf5fa;--muted:#91a9b8;--blue:#5fa8ff;--green:#39d98a;--amber:#ffc857;--red:#ff6b6b}
+    *{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 10% 0,#173149 0,transparent 35%),var(--bg);color:var(--text);font:15px/1.45 system-ui,Segoe UI,sans-serif}
+    main{width:min(1180px,calc(100% - 32px));margin:32px auto 70px}header{display:flex;gap:20px;align-items:flex-start;justify-content:space-between;margin-bottom:18px}
+    h1{font-size:clamp(30px,5vw,52px);line-height:1;margin:5px 0 8px}.eyebrow{color:var(--blue);font-size:12px;font-weight:800;letter-spacing:.13em;text-transform:uppercase}
+    .badge,.chip{display:inline-flex;border:1px solid var(--line);border-radius:999px;padding:7px 11px;color:var(--muted);background:#08151e}.badge{color:var(--amber);border-color:#70591d}
+    .safety{padding:14px 18px;border:1px solid #765c18;border-radius:12px;background:#30270d;color:#ffe08a;text-align:center;font-weight:800;margin-bottom:18px}
+    .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.panel{background:rgba(16,32,44,.94);border:1px solid var(--line);border-radius:14px;padding:18px}.wide{grid-column:1/-1}
+    h2{font-size:17px;margin:0 0 14px}.controls{display:flex;flex-wrap:wrap;gap:9px}.controls button{border:1px solid #3f6681;background:#122a3b;color:var(--text);border-radius:9px;padding:10px 13px;font:inherit;cursor:pointer}.controls button:hover,.controls button.active{border-color:var(--blue);background:#173c56}
+    .route-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.route{padding:12px;border-radius:10px;background:var(--panel2);border:1px solid var(--line)}.route b{display:block;margin-bottom:5px}.route code{font-size:12px;color:#b8d9ef;overflow-wrap:anywhere}
+    .result{display:grid;grid-template-columns:180px 1fr;gap:18px;align-items:start}.state{border-radius:12px;padding:18px;text-align:center;border:1px solid var(--line);background:var(--panel2)}.state strong{font-size:19px;display:block;margin-top:8px}.state.applied strong{color:var(--green)}.state.replayed strong{color:var(--blue)}.state.conflict strong{color:var(--amber)}
+    pre{margin:0;min-height:160px;max-height:360px;overflow:auto;padding:14px;border-radius:10px;background:#06111a;border:1px solid #1f3443;color:#dceaf3;font:12px/1.5 ui-monospace,Consolas,monospace;white-space:pre-wrap;word-break:break-word}
+    .facts{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.fact{background:var(--panel2);padding:12px;border-radius:10px}.fact small{display:block;color:var(--muted);text-transform:uppercase;font-size:10px}.fact b{display:block;margin-top:5px}
+    footer{color:var(--muted);text-align:center;margin-top:22px}@media(max-width:800px){.grid{grid-template-columns:1fr}.route-grid,.facts{grid-template-columns:1fr 1fr}.result{grid-template-columns:1fr}}@media(max-width:480px){.route-grid,.facts{grid-template-columns:1fr}}
+  </style>
+</head>
+<body data-source="validated-asgi-fixture" data-real-mode="off">
+<main>
+  <header>
+    <div><div class="eyebrow">bitrix_connector</div><h1>Review Decision Lab</h1><div>Recorrido visual de decisiones humanas sobre ASGI en memoria</div></div>
+    <span class="badge">REAL: OFF · LOCKED</span>
+  </header>
+  <div class="safety">TRANSCRIPCIÓN VALIDADA CONTRA LAS RUTAS OBJETIVO · EL NAVEGADOR NO EMITE HTTP · CERO SERVICIOS EXTERNOS</div>
+
+  <section class="panel wide">
+    <h2>Cuatro acciones conectadas por el adaptador</h2>
+    <div class="route-grid">
+      <div class="route"><b>Aprobar entrada</b><code>POST …/approve-input</code></div>
+      <div class="route"><b>Rechazar entrada</b><code>POST …/reject-input</code></div>
+      <div class="route"><b>Aprobar salida</b><code>POST …/approve-output</code></div>
+      <div class="route"><b>Rechazar salida</b><code>POST …/reject-output</code></div>
+    </div>
+  </section>
+
+  <section class="panel wide">
+    <h2>Escenario canónico validado</h2>
+    <div class="controls">
+      <button type="button" data-scenario="applied">1. Aplicar aprobación</button>
+      <button type="button" data-scenario="replayed">2. Repetir mismo decision_id</button>
+      <button type="button" data-scenario="conflict">3. Cambiar significado con el mismo UUID</button>
+    </div>
+  </section>
+
+  <div class="facts">
+    <div class="fact"><small>Infraestructura</small><b>ASGITransport + dobles</b></div>
+    <div class="fact"><small>Mongo real</small><b>NO USADO</b></div>
+    <div class="fact"><small>Bitrix / NIA</small><b>0 llamadas</b></div>
+    <div class="fact"><small>Auditoría fixture</small><b>3 intentos</b></div>
+  </div>
+
+  <div class="grid" style="margin-top:14px">
+    <section class="panel wide">
+      <h2>Resultado visible</h2>
+      <div class="result">
+        <div id="stateCard" class="state"><span class="chip">HTTP</span><strong id="stateLabel">Selecciona un paso</strong><div id="stateCode"></div></div>
+        <div><p id="stateExplanation" style="margin-top:0;color:var(--muted)"></p><div class="chip">decision_id: 12345678-1234-4678-9234-567812345678</div></div>
+      </div>
+    </section>
+    <section class="panel"><h2>Solicitud exacta al adaptador</h2><pre id="requestView"></pre></section>
+    <section class="panel"><h2>Respuesta exacta de la ruta</h2><pre id="responseView"></pre></section>
+    <section class="panel wide"><h2>Persistencia observada en los dobles</h2><pre id="storageView"></pre></section>
+  </div>
+  <footer>Evento ficticio · ninguna negociación real · evidencia local reproducible · runtime operativo real intacto</footer>
+</main>
+<script>
+  const EVENT_KEY="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+  const CONTENT_HASH="bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+  const DECISION_ID="12345678-1234-4678-9234-567812345678";
+  const commonRequest=Object.freeze({content_hash:CONTENT_HASH,decision_id:DECISION_ID,expected_status:"needs_input_review",confirmation:"APROBAR ENVIO A NIA"});
+  const evidence=Object.freeze({
+    applied:{
+      request:commonRequest,
+      response:{status_code:200,code:"review_applied",request_id:"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",receipt:{decision_id:DECISION_ID,event_key:EVENT_KEY,stage:"input",outcome:"applied",idempotent:false,status_before:"needs_input_review",status_after:"ready_for_nia",content_hash:CONTENT_HASH,actor:"controlled-reviewer",observed_at:"2026-07-23T18:00:00+00:00"}},
+      storage:{event_status:"ready_for_nia",transition_count:1,audit_attempts:1,bitrix_attempts:0,nia_attempts:0},
+      explanation:"La primera intención válida aplica una sola transición y registra su auditoría."
+    },
+    replayed:{
+      request:commonRequest,
+      response:{status_code:200,code:"review_replayed",request_id:"bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",receipt:{decision_id:DECISION_ID,event_key:EVENT_KEY,stage:"input",outcome:"applied",idempotent:true,status_before:"needs_input_review",status_after:"ready_for_nia",content_hash:CONTENT_HASH,actor:"controlled-reviewer",observed_at:"2026-07-23T18:00:00+00:00"}},
+      storage:{event_status:"ready_for_nia",transition_count:1,audit_attempts:2,bitrix_attempts:0,nia_attempts:0},
+      explanation:"El mismo UUID y el mismo significado recuperan la decisión original; no hay una segunda transición."
+    },
+    conflict:{
+      request:{...commonRequest,reason:"significado diferente"},
+      response:{status_code:409,code:"review_idempotency_conflict",request_id:"cccccccc-cccc-4ccc-8ccc-cccccccccccc"},
+      storage:{event_status:"ready_for_nia",transition_count:1,audit_attempts:3,bitrix_attempts:0,nia_attempts:0},
+      explanation:"Reutilizar el UUID con otro significado se rechaza y conserva intacto el evento."
+    }
+  });
+  const fixtureDecisionAdapter=Object.freeze({async decide(scenario){return structuredClone(evidence[scenario]);}});
+  const pretty=value=>JSON.stringify(value,null,2);
+  async function showScenario(name){
+    const item=await fixtureDecisionAdapter.decide(name);
+    document.querySelectorAll("[data-scenario]").forEach(button=>button.classList.toggle("active",button.dataset.scenario===name));
+    const state=document.getElementById("stateCard");state.className=`state ${name}`;
+    document.getElementById("stateLabel").textContent=name==="applied"?"APLICADA":name==="replayed"?"REPLAY IDEMPOTENTE":"CONFLICTO BLOQUEADO";
+    document.getElementById("stateCode").textContent=`HTTP ${item.response.status_code} · ${item.response.code}`;
+    document.getElementById("stateExplanation").textContent=item.explanation;
+    document.getElementById("requestView").textContent=pretty(item.request);
+    document.getElementById("responseView").textContent=pretty(item.response);
+    document.getElementById("storageView").textContent=pretty(item.storage);
+  }
+  document.querySelectorAll("[data-scenario]").forEach(button=>button.addEventListener("click",()=>showScenario(button.dataset.scenario)));
+  showScenario("applied");
+</script>
+</body>
+</html>
