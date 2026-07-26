@@ -122,6 +122,7 @@ from response_engine import (
     respuesta_sin_resultado,
     contiene_placeholder,
 )
+from optional_bitrix_connector import mount_optional_bitrix_connector
 
 
 # ─────────────────────────────────────────────────────────────
@@ -177,6 +178,15 @@ app.add_middleware(
     allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
+)
+bitrix_connector_mount = mount_optional_bitrix_connector(
+    app,
+    logger=logger,
+)
+app.state.bitrix_connector_module_status = bitrix_connector_mount.status.value
+logger.info(
+    "Bitrix connector module status: %s",
+    bitrix_connector_mount.status.value,
 )
 
 

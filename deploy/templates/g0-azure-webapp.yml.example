@@ -1,0 +1,116 @@
+# PLANTILLA SUPERSEDIDA: no activar ni mover a .github/workflows.
+# La decisión vigente integra el módulo apagable en nia-v365-next-api.
+# Plantilla deliberadamente inerte.
+# GitHub Actions solo descubre workflows bajo .github/workflows; este archivo
+# no debe moverse alli sin una autorizacion independiente de activacion.
+
+name: TEMPLATE - Deploy isolated NIA Bitrix G0 in off mode
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: 'Escriba exactamente: DESPLEGAR G0 OFF'
+        required: true
+        type: string
+
+concurrency:
+  group: nia-bitrix-g0-off-deployment
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  G0_CONFIRMATION: ${{ inputs.confirmation }}
+  G0_APP_NAME: ${{ vars.NIA_BITRIX_G0_AZURE_WEBAPP_NAME }}
+  G0_PUBLIC_ORIGIN: ${{ vars.NIA_BITRIX_G0_PUBLIC_ORIGIN }}
+
+jobs:
+  validate-build-deploy:
+    name: Validate, package and deploy isolated G0
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact revision
+        uses: actions/checkout@v4
+
+      - name: Reject missing confirmation or unsafe destination
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$G0_CONFIRMATION" != "DESPLEGAR G0 OFF" ]]; then
+            echo "Manual confirmation is not exact."
+            exit 1
+          fi
+          if [[ -z "${G0_APP_NAME// }" ]]; then
+            echo "NIA_BITRIX_G0_AZURE_WEBAPP_NAME is required."
+            exit 1
+          fi
+          if [[ "${G0_APP_NAME,,}" == "nia-v365" ]]; then
+            echo "Refusing to deploy G0 to nia-v365."
+            exit 1
+          fi
+          if [[ ! "$G0_PUBLIC_ORIGIN" =~ ^https://[A-Za-z0-9.-]+$ ]]; then
+            echo "NIA_BITRIX_G0_PUBLIC_ORIGIN must be an HTTPS origin without path or port."
+            exit 1
+          fi
+          g0_host="${G0_PUBLIC_ORIGIN#https://}"
+          if [[ "$g0_host" == "localhost" || "$g0_host" == *.localhost || "$g0_host" == *.trycloudflare.com ]]; then
+            echo "Temporary or local G0 origins are forbidden."
+            exit 1
+          fi
+          if [[ "$g0_host" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
+            echo "IP-literal G0 origins are forbidden."
+            exit 1
+          fi
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Install dependencies
+        run: python -m pip install -r requirements.txt
+
+      - name: Run repository tests with local doubles
+        run: python -m unittest discover -s tests
+
+      - name: Build minimal G0 package
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir g0-package
+          cp -R bitrix_connector g0-package/bitrix_connector
+          cp requirements.txt g0-package/requirements.txt
+          find g0-package -type d -name __pycache__ -prune -exec rm -rf {} +
+          find g0-package -type f \( -name '*.pyc' -o -name '.env' -o -name '.env.*' \) -delete
+
+      - name: Publish exact G0 artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: nia-bitrix-g0-off
+          path: g0-package
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Login to Azure with the dedicated G0 identity
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.NIA_BITRIX_G0_AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.NIA_BITRIX_G0_AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.NIA_BITRIX_G0_AZURE_SUBSCRIPTION_ID }}
+
+      - name: Deploy only the minimal G0 package
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ env.G0_APP_NAME }}
+          slot-name: Production
+          package: g0-package
+
+      - name: Verify public off-mode health only
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -c "import json, os, urllib.request; data=json.load(urllib.request.urlopen(os.environ['G0_PUBLIC_ORIGIN'] + '/healthz', timeout=10)); required={'effective_mode':'off','activation_locked':True,'external_calls_enabled':False,'pilot_enabled':False,'pilot_emergency_stop':True,'accepting_webhooks':True}; assert all(data.get(k)==v for k,v in required.items()), data"

@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>NIA · Review Lab</title>
+  <style>
+    :root{color-scheme:dark;--bg:#071019;--panel:#101d29;--line:#263746;--text:#e8f0f7;--muted:#92a7b8;--safe:#59d49a;--warn:#ffc857;--accent:#62a8ff}
+    *{box-sizing:border-box}body{margin:0;font:15px/1.5 Inter,Segoe UI,sans-serif;background:radial-gradient(circle at 15% 0,#17304a 0,transparent 36%),var(--bg);color:var(--text)}
+    main{max-width:1180px;margin:auto;padding:32px 20px 64px}header{display:flex;justify-content:space-between;gap:20px;align-items:end;margin-bottom:22px}h1{margin:0;font-size:clamp(28px,5vw,48px);letter-spacing:-.04em}h2{font-size:17px;margin:0 0 14px}.eyebrow{color:var(--accent);font-weight:700;letter-spacing:.12em;text-transform:uppercase}
+    .banner{padding:14px 18px;border:1px solid #8f7427;background:#2c260f;color:#ffe49b;border-radius:12px;font-weight:800;text-align:center}.badges{display:flex;flex-wrap:wrap;gap:8px;margin:18px 0}.badge{border:1px solid var(--line);border-radius:999px;padding:6px 10px;background:#0b1721}.safe{color:var(--safe)}.warn{color:var(--warn)}
+    .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.panel{border:1px solid var(--line);border-radius:16px;padding:18px;background:#101d29;box-shadow:0 16px 40px #0003}.wide{grid-column:1/-1}.chat{display:grid;gap:12px}.bubble{max-width:78%;padding:13px 15px;border-radius:16px;background:#18324a}.nia{justify-self:end;background:#173c31}.bubble small{display:block;color:var(--muted);margin-bottom:5px}
+    pre{margin:0;padding:14px;border-radius:10px;background:#07111a;overflow:auto;max-height:340px;color:#c9def0;font:12px/1.55 Consolas,monospace}ol{list-style:none;padding:0;margin:0;display:grid;grid-template-columns:repeat(4,1fr);gap:10px}li{border-top:3px solid var(--accent);padding:10px;background:#0a1620;border-radius:8px}li span{color:var(--muted);text-transform:uppercase;font-size:11px}li b{display:block}li p{margin:7px 0 0}
+    button{padding:10px 14px;border-radius:9px;border:1px solid var(--line);margin:4px}button:disabled{color:#788895;background:#111a22;cursor:not-allowed}.hash{word-break:break-all;color:var(--muted);font:12px Consolas,monospace}footer{color:var(--muted);margin-top:20px;text-align:center}@media(max-width:760px){header{display:block}.grid{grid-template-columns:1fr}.wide{grid-column:auto}ol{grid-template-columns:1fr}.bubble{max-width:94%}}
+  </style>
+</head>
+<body data-simulation="true">
+<main>
+  <header><div><div class="eyebrow">bitrix_connector</div><h1>Review Lab</h1><div>Chat controlado · bomba centrífuga</div></div><div class="badge warn">Escenario: SHADOW</div></header>
+  <div class="banner">SIMULACIÓN LOCAL · MODO REAL OFF · SIN CONEXIONES EXTERNAS</div>
+  <div class="badges"><span class="badge safe">activation_locked = true</span><span class="badge safe">external_calls_enabled = false</span><span class="badge safe">Bitrix escritos = 0</span><span class="badge">Estado simulado: shadowed</span></div>
+  <section class="panel wide"><h2>Recorrido del evento</h2><ol>
+    <li><span>received</span><b>verified</b><p>Evento ficticio recibido y secretos redactados.</p></li>
+    <li><span>preflight</span><b>ready</b><p>Texto normalizado y payload exacto preparados.</p></li>
+    <li><span>nia</span><b>simulated</b><p>Respuesta producida por un doble local de NIA.</p></li>
+    <li><span>bitrix</span><b>suppressed</b><p>Salida visible, pero no enviada por shadow.</p></li>
+  </ol></section>
+  <div class="grid" style="margin-top:16px">
+    <section class="panel wide"><h2>Conversación visible</h2><div class="chat"><div class="bubble"><small>Cliente · mensaje normalizado</small>Necesito una bomba centrífuga para agua limpia, 10 HP.</div><div class="bubble nia"><small>NIA · respuesta del doble local</small>Para recomendar la bomba correcta, ¿qué caudal y altura dinámica total necesitas?</div></div></section>
+    <section class="panel"><h2>1. Evento original redactado</h2><pre>{
+  "event": "ONIMBOTV2MESSAGEADD",
+  "data[bot][id]": "456",
+  "data[message][id]": "9001",
+  "data[message][chatId]": "73",
+  "data[message][authorId]": "27",
+  "data[message][text]": "  Necesito una bomba centrífuga para agua limpia, 10 HP.  ",
+  "data[message][isSystem]": "0",
+  "data[chat][dialogId]": "chat-controlado-001",
+  "data[chat][type]": "openChannel",
+  "data[chat][entityType]": "LINES",
+  "data[user][id]": "27",
+  "data[user][bot]": "0",
+  "data[user][connector]": "1",
+  "auth[domain]": "demo.bitrix24.invalid",
+  "auth[member_id]": "member-demo",
+  "auth[application_token]": "[REDACTED]"
+}</pre></section>
+    <section class="panel"><h2>2. Mensaje normalizado</h2><pre>{
+  "event": "ONIMBOTV2MESSAGEADD",
+  "message_id": 9001,
+  "chat_id": 73,
+  "dialog_id": "chat-controlado-001",
+  "author_id": 27,
+  "member_id": "member-demo",
+  "text": "Necesito una bomba centrífuga para agua limpia, 10 HP.",
+  "original_text_length": 58,
+  "normalized_text_length": 54
+}</pre></section>
+    <section class="panel"><h2>3. Manifiesto de adjuntos</h2><pre>{
+  "transformations": ["horizontal_whitespace_collapsed", "outer_whitespace_trimmed"],
+  "signals": [],
+  "blocking_reasons": [],
+  "attachment_status": "not_present",
+  "attachment_count": 0
+}</pre></section>
+    <section class="panel"><h2>4. Payload exacto para NIA</h2><pre>{
+  "session_id": "bitrix:member-demo:chat-controlado-001",
+  "mensaje": "Necesito una bomba centrífuga para agua limpia, 10 HP."
+}</pre><p class="hash">SHA-256: fd706eda15e31f76071f53434b19dec3da1f72a9306ff8e07bd84ddaafbe7b05</p></section>
+    <section class="panel"><h2>5. Respuesta exacta de NIA</h2><pre>{
+  "respuesta": "Para recomendar la bomba correcta, ¿qué caudal y altura dinámica total necesitas?",
+  "etapa": "descubrimiento",
+  "items_resultado": [],
+  "cliente": {"kind": "fixture", "id": "contacto-controlado"}
+}</pre></section>
+    <section class="panel"><h2>6. Salida exacta hacia Bitrix</h2><pre>{
+  "botId": 456,
+  "dialogId": "chat-controlado-001",
+  "fields": {"message": "Para recomendar la bomba correcta, ¿qué caudal y altura dinámica total necesitas?"}
+}</pre><p class="hash">SHA-256: 3dc29a7ebbcfaa077388561a1769456c6b594dd89a7765e0230abcefd03ccc17</p></section>
+    <section class="panel"><h2>Guard operativo</h2><pre>{
+  "initial_mode": "shadow",
+  "observed_modes": ["shadow"],
+  "requires_input_approval": false,
+  "requires_output_approval": false,
+  "bitrix_send_allowed": false
+}</pre></section>
+    <section class="panel"><h2>Resultado shadow</h2><pre>{
+  "status": "shadowed",
+  "reason": "bitrix_suppressed_by_shadow",
+  "bitrix_attempt_count": 0,
+  "outbound_message_id": null
+}</pre></section>
+    <section class="panel wide"><h2>Acciones de revisión</h2><button disabled>Aprobar entrada</button><button disabled>Rechazar entrada</button><button disabled>Aprobar salida</button><button disabled>Enviar a Bitrix</button><p class="warn">Deshabilitadas: esta vista no contiene rutas de escritura.</p></section>
+  </div>
+  <footer>Evento d7bcdc33da5ae4d041db2bd85a472a1965ab29b4676bf8f2c7bf2b1229a08c1a · fixture local · ninguna llamada real</footer>
+</main>
+</body>
+</html>

@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>NIA · Dynamic Review Lab</title>
+  <style>
+    :root{color-scheme:dark;--bg:#071019;--panel:#101d29;--line:#263746;--text:#e8f0f7;--muted:#92a7b8;--safe:#59d49a;--warn:#ffc857;--accent:#62a8ff}
+    *{box-sizing:border-box}body{margin:0;font:15px/1.5 Inter,Segoe UI,sans-serif;background:radial-gradient(circle at 15% 0,#17304a 0,transparent 36%),var(--bg);color:var(--text)}
+    main{max-width:1180px;margin:auto;padding:32px 20px 64px}header{display:flex;justify-content:space-between;gap:20px;align-items:end;margin-bottom:18px}h1{margin:0;font-size:clamp(28px,5vw,48px);letter-spacing:-.04em}h2{font-size:17px;margin:0 0 14px}.eyebrow{color:var(--accent);font-weight:700;letter-spacing:.12em;text-transform:uppercase}
+    .banner{padding:14px 18px;border:1px solid #8f7427;background:#2c260f;color:#ffe49b;border-radius:12px;font-weight:800;text-align:center}.toolbar,.badges{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:16px 0}.badge{border:1px solid var(--line);border-radius:999px;padding:6px 10px;background:#0b1721}.safe{color:var(--safe)}.warn{color:var(--warn)}
+    select,button{font:inherit;padding:10px 13px;border-radius:9px;border:1px solid var(--line);color:var(--text);background:#132535}button:not(:disabled){cursor:pointer;border-color:#3975aa}button:disabled{color:#788895;background:#111a22;cursor:not-allowed}.source{margin-left:auto}
+    .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.panel{border:1px solid var(--line);border-radius:16px;padding:18px;background:var(--panel);box-shadow:0 16px 40px #0003}.wide{grid-column:1/-1}.provenance{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;border-color:#6e5922}.fact{padding:12px;border-radius:10px;background:#0a1620}.fact small{display:block;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}.fact strong{display:block;margin-top:4px}.chat{display:grid;gap:12px}.bubble{max-width:78%;padding:13px 15px;border-radius:16px;background:#18324a}.nia{justify-self:end;background:#173c31}.bubble small{display:block;color:var(--muted);margin-bottom:5px}
+    pre{margin:0;padding:14px;border-radius:10px;background:#07111a;overflow:auto;max-height:340px;color:#c9def0;font:12px/1.55 Consolas,monospace}.journey{list-style:none;padding:0;margin:0;display:grid;grid-template-columns:repeat(4,1fr);gap:10px}.journey li{border-top:3px solid var(--accent);padding:10px;background:#0a1620;border-radius:8px}.journey span{color:var(--muted);text-transform:uppercase;font-size:11px}.journey b{display:block}.journey p{margin:7px 0 0}.hash{word-break:break-all;color:var(--muted);font:12px Consolas,monospace}.pilot-heading{display:flex;justify-content:space-between;gap:12px;align-items:center}.pilot-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.4fr);gap:14px}.pilot-box{background:#0a1620;border-radius:12px;padding:14px}.pilot-box h3{margin:0 0 10px;font-size:14px}.identity{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:0}.identity div,.gate{border:1px solid var(--line);border-radius:9px;padding:9px}.identity dt{color:var(--muted);font-size:11px;text-transform:uppercase}.identity dd{margin:2px 0 0;font-weight:700;word-break:break-word}.gates{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.gate.allowed{border-color:#287a58}.gate.pending{border-color:#8f7427}.gate small,.gate span{display:block;color:var(--muted)}.gate strong{display:block;margin:4px 0}.pilot-matrix{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-top:14px}.pilot-case{padding:9px;border-radius:9px;background:#0a1620;border-left:3px solid var(--warn)}.pilot-case.allowed{border-left-color:var(--safe)}.pilot-case strong,.pilot-case small{display:block}.pilot-case small{color:var(--muted)}footer{color:var(--muted);margin-top:20px;text-align:center}
+    @media(max-width:760px){header{display:block}.source{margin-left:0}.grid,.provenance,.pilot-grid{grid-template-columns:1fr}.wide{grid-column:auto}.journey,.pilot-matrix{grid-template-columns:1fr}.bubble{max-width:94%}}
+  </style>
+</head>
+<body data-source="fixture" data-read-only="true">
+<main>
+  <header><div><div class="eyebrow">bitrix_connector</div><h1>Dynamic Review Lab</h1><div>Auditoría visual de un chat controlado</div></div><div id="statusBadge" class="badge warn">Cargando fixture…</div></header>
+  <div id="banner" class="banner">WORKER COMPUESTO · MODO REAL OFF · SIN SERVICIOS EXTERNOS</div>
+  <div class="toolbar">
+    <label for="eventSelector">Evento</label><select id="eventSelector" aria-label="Seleccionar evento"></select>
+    <button id="refreshButton" type="button">Actualizar vista</button><span id="sourceBadge" class="badge source">Fuente: fixture validada contra worker compuesto</span>
+  </div>
+  <div class="badges"><span class="badge safe">effective_mode real = off</span><span class="badge safe">activation_locked = true</span><span class="badge safe">external_calls_enabled = false</span><span class="badge warn">política del ensayo = review</span><span class="badge safe">Bitrix escritos = 0</span><span class="badge">Solo lectura</span></div>
+  <section class="panel provenance" aria-labelledby="provenanceTitle">
+    <h2 id="provenanceTitle" class="wide">Procedencia de esta evidencia</h2>
+    <div class="fact"><small>Tipo</small><strong id="evidenceType"></strong></div>
+    <div class="fact"><small>Negociación Bitrix</small><strong id="negotiationId"></strong></div>
+    <div class="fact"><small>Respuesta atribuida a NIA</small><strong id="niaResponseOrigin"></strong></div>
+    <div class="fact"><small>Infraestructura del ensayo</small><strong id="labInfrastructure"></strong></div>
+    <div class="fact"><small>Contacto</small><strong id="contactId"></strong></div>
+    <div class="fact"><small>Canal</small><strong id="channelName"></strong></div>
+    <div class="fact"><small>dialogId</small><strong id="dialogId"></strong></div>
+    <div class="fact"><small>Estado operativo real</small><strong id="realMode"></strong></div>
+    <div class="fact"><small>Política inyectada en el ensayo</small><strong id="scenarioMode"></strong></div>
+  </section>
+  <section class="panel wide"><h2>Recorrido del evento</h2><ol id="journey" class="journey"></ol></section>
+  <section id="pilotPanel" class="panel wide" style="margin-top:16px" hidden>
+    <div class="pilot-heading"><h2>Compuertas piloto antes de cada cliente</h2><span id="pilotRealState" class="badge safe"></span></div>
+    <div class="pilot-grid">
+      <div class="pilot-box"><h3>Identidad exacta y ventana del ensayo</h3><dl id="pilotIdentity" class="identity"></dl><p id="pilotWindow" class="hash"></p><p id="pilotScenarioState" class="warn"></p></div>
+      <div class="pilot-box"><h3>Resultado por punto de despacho</h3><div id="pilotGates" class="gates"></div></div>
+    </div>
+    <div id="pilotMatrix" class="pilot-matrix" aria-label="Comportamientos fail-closed verificados"></div>
+  </section>
+  <div class="grid" style="margin-top:16px">
+    <section class="panel wide"><h2>Conversación visible · misma sesión</h2><div id="conversation" class="chat"></div></section>
+    <section class="panel"><h2>1. Evento original redactado</h2><pre id="originalEvent"></pre></section>
+    <section class="panel"><h2>2. Mensaje normalizado</h2><pre id="normalizedMessage"></pre></section>
+    <section class="panel"><h2>3. Manifiesto de adjuntos</h2><pre id="attachmentManifest"></pre></section>
+    <section class="panel"><h2>4. Payload exacto para NIA</h2><pre id="niaPayload"></pre><p id="inputHash" class="hash"></p></section>
+    <section class="panel"><h2>5. Respuesta exacta de NIA</h2><pre id="niaResponse"></pre></section>
+    <section class="panel"><h2>6. Salida exacta hacia Bitrix</h2><pre id="bitrixPreview"></pre><p id="outputHash" class="hash"></p></section>
+    <section class="panel"><h2>Guard del escenario sintético</h2><pre id="workflowGuard"></pre></section>
+    <section class="panel"><h2>Estado del despacho</h2><pre id="dispatchResult"></pre></section>
+    <section class="panel wide"><h2>Acciones de revisión</h2><button disabled>Aprobar entrada</button><button disabled>Rechazar entrada</button><button disabled>Aprobar salida</button><button disabled>Rechazar salida</button><p class="warn">Deshabilitadas: esta vista no invoca las rutas administrativas y el runtime real permanece off.</p></section>
+  </div>
+  <footer id="footer"></footer>
+</main>
+<script id="composedWorkerFixture" type="application/json">
+{
+  "event_key": "6c7d84115a77e2d67f7b834fa58b9b7ae205d84240cf4c9a96359dbc1a51fe6a",
+  "status": "needs_output_review",
+  "turn_label": "Worker compuesto",
+  "provenance": {
+    "evidence_type": "WORKER COMPUESTO HERMÉTICO",
+    "negotiation_id": null,
+    "nia_response_origin": "NIA CLIENT + /NIA/CHAT AISLADO · MAIN.PY + RESPONSE_ENGINE REALES",
+    "lab_infrastructure": "WORKERS + ALMACÉN + SESIÓN + CATÁLOGO EN MEMORIA",
+    "contact_id": "contacto-controlado (ficticio)",
+    "channel_name": "Canal Abierto controlado (ficticio)",
+    "dialog_id": "chat5"
+  },
+  "real_safety": {"effective_mode":"off","activation_locked":true,"external_calls_enabled":false,"services_started":false,"pilot_enabled":false,"pilot_emergency_stop":true},
+  "original_event_redacted": {
+    "event":"ONIMBOTV2MESSAGEADD","ts":"1772093963","data[bot][id]":"456","data[message][id]":"789","data[message][chatId]":"5","data[message][authorId]":"27","data[message][text]":"Necesito una bomba centrífuga para agua limpia, 10 HP.","data[chat][dialogId]":"chat5","data[chat][type]":"openChannel","data[chat][entityType]":"LINES","data[user][id]":"27","auth[domain]":"viaindustrial.bitrix24.es","auth[member_id]":"member-123","auth[application_token]":"[REDACTED]","data[bot][auth][access_token]":"[REDACTED]"
+  },
+  "normalized_message": {"event":"ONIMBOTV2MESSAGEADD","message_id":789,"chat_id":5,"dialog_id":"chat5","author_id":27,"member_id":"member-123","text":"Necesito una bomba centrífuga para agua limpia, 10 HP.","original_text_length":54,"normalized_text_length":54},
+  "attachment_manifest": {"transformations":[],"signals":[],"blocking_reasons":[],"attachment_status":"not_present","attachment_count":0},
+  "nia_payload": {"session_id":"bitrix:member-123:chat5","mensaje":"Necesito una bomba centrífuga para agua limpia, 10 HP."},
+  "input_content_hash": "43cd4f7f32cb61411ad09fbf7d40b30c931a510e68997d520d33883563eb4137",
+  "input_decision": {"decision":"approved","source":"human","actor":"controlled-human-reviewer","scenario_mode":"review"},
+  "nia_response": {"respuesta":"encontré una opción del catálogo que puede cubrir tu necesidad:\n\nCódigo: LAB-001\nReferencia: BOMBA-LAB-10HP\nNombre: Bomba centrífuga de ensayo controlado\nMarca: Marca fixture\nDescripción: Bomba para agua limpia, 10 HP\nExistencia: Fixture local\nStock total: 0\n\n¿Este producto cubre lo que necesitas?","etapa":"producto_encontrado","items_resultado":null,"cliente":null},
+  "bitrix_payload_preview": {"botId":456,"dialogId":"chat5","fields":{"message":"encontré una opción del catálogo que puede cubrir tu necesidad:\n\nCódigo: LAB-001\nReferencia: BOMBA-LAB-10HP\nNombre: Bomba centrífuga de ensayo controlado\nMarca: Marca fixture\nDescripción: Bomba para agua limpia, 10 HP\nExistencia: Fixture local\nStock total: 0\n\n¿Este producto cubre lo que necesitas?"}},
+  "output_content_hash": "d13f8747ab0aed464d6e9d2df51f8fabb60974ce56704f8235e43b0091dd1e61",
+  "conversation_turns": [
+    {"role":"user","label":"Cliente · entrada aprobada","content":"Necesito una bomba centrífuga para agua limpia, 10 HP."},
+    {"role":"assistant","label":"NIA Next · respuesta procesada por worker","content":"encontré una opción del catálogo que puede cubrir tu necesidad:\n\nCódigo: LAB-001\nReferencia: BOMBA-LAB-10HP\nNombre: Bomba centrífuga de ensayo controlado\nMarca: Marca fixture\nDescripción: Bomba para agua limpia, 10 HP\nExistencia: Fixture local\nStock total: 0\n\n¿Este producto cubre lo que necesitas?"}
+  ],
+  "workflow_guard": {"schema_version":1,"initial_mode":"review","observed_modes":["review"],"requires_input_approval":true,"requires_output_approval":true,"bitrix_send_allowed":true},
+  "dispatch_result": {"status":"needs_output_review","output_approval":"pending","nia_http_requests":1,"bitrix_attempt_count":0,"openai_attempt_count":0,"outbound_message_id":null},
+  "pilot_gate_evidence": {
+    "source":"FIXTURE HERMÉTICA VALIDADA CONTRA COMPUERTAS DE DESPACHO",
+    "scenario":{"enabled":true,"emergency_stop":false},
+    "evaluated_identity":{"member_id":"member-123","bot_id":456,"dialog_id":"chat5","chat_id":5},
+    "window":{"valid_from":"2026-07-16T11:59:00Z","evaluated_at":"2026-07-16T12:00:00Z","valid_until":"2026-07-16T12:01:00Z"},
+    "gates":[
+      {"target":"NIA","checkpoint":"inmediatamente antes de NiaClient","status":"allowed","reason":"pilot_scope_allowed","effect":"1 solicitud al transporte en memoria"},
+      {"target":"Bitrix","checkpoint":"inmediatamente antes de BitrixClient","status":"pending","reason":"output_approval_pending","effect":"compuerta no alcanzada · 0 intentos Bitrix"}
+    ],
+    "verified_cases":[
+      {"label":"Identidad exacta + ventana activa","status":"allowed","reason":"pilot_scope_allowed"},
+      {"label":"Identidad diferente","status":"blocked","reason":"outside_pilot_scope"},
+      {"label":"Ventana vencida","status":"blocked","reason":"pilot_scope_expired"},
+      {"label":"Parada de emergencia","status":"blocked","reason":"pilot_emergency_stop"}
+    ]
+  },
+  "journey": [
+    {"stage":"received","status":"verified","detail":"Evento controlado, identidad verificada y secretos redactados."},
+    {"stage":"preflight","status":"human approved","detail":"Payload exacto aprobado por controlled-human-reviewer."},
+    {"stage":"nia","status":"core processed","detail":"Un POST en memoria a /nia/chat; respuesta construida por main.py y response_engine."},
+    {"stage":"bitrix","status":"waiting review","detail":"Salida exacta visible en needs_output_review; cero intentos Bitrix."}
+  ]
+}
+</script>
+<script>
+  "use strict";
+  const composedFixtureDetail = Object.freeze(JSON.parse(document.getElementById("composedWorkerFixture").textContent));
+  const firstFixtureDetail = Object.freeze({
+    event_key:"d7bcdc33da5ae4d041db2bd85a472a1965ab29b4676bf8f2c7bf2b1229a08c1a",status:"shadowed",received_at:"2026-07-21T15:00:00Z",updated_at:"2026-07-21T15:00:02Z",
+    provenance:{evidence_type:"ENSAYO LOCAL HERMÉTICO",negotiation_id:null,nia_response_origin:"CAPTURA DE PRUEBA · MAIN.PY + RESPONSE_ENGINE REALES",lab_infrastructure:"SESIÓN Y CATÁLOGO EN MEMORIA · OPENAI NO USADO",contact_id:"contacto-controlado (ficticio)",channel_name:"Canal Abierto demo (ficticio)",dialog_id:"chat-controlado-001"},
+    original_event_redacted:{event:"ONIMBOTV2MESSAGEADD","data[bot][id]":"456","data[message][id]":"9001","data[message][chatId]":"73","data[message][authorId]":"27","data[message][text]":"  Necesito una bomba centrífuga para agua limpia, 10 HP.  ","data[chat][dialogId]":"chat-controlado-001","auth[domain]":"demo.bitrix24.invalid","auth[member_id]":"member-demo","auth[application_token]":"[REDACTED]"},
+    normalized_message:{event:"ONIMBOTV2MESSAGEADD",message_id:9001,chat_id:73,dialog_id:"chat-controlado-001",author_id:27,member_id:"member-demo",text:"Necesito una bomba centrífuga para agua limpia, 10 HP."},
+    attachment_manifest:{transformations:["horizontal_whitespace_collapsed","outer_whitespace_trimmed"],signals:[],blocking_reasons:[],attachment_status:"not_present",attachment_count:0},
+    nia_payload:{session_id:"bitrix:member-demo:chat-controlado-001",mensaje:"Necesito una bomba centrífuga para agua limpia, 10 HP."},
+    input_content_hash:"fd706eda15e31f76071f53434b19dec3da1f72a9306ff8e07bd84ddaafbe7b05",
+    nia_response:{respuesta:"encontré una opción del catálogo que puede cubrir tu necesidad:\n\nCódigo: LAB-001\nReferencia: BOMBA-LAB-10HP\nNombre: Bomba centrífuga de ensayo controlado\nMarca: Marca fixture\nDescripción: Bomba para agua limpia, 10 HP\nExistencia: Fixture local\nStock total: 0\n\n¿Este producto cubre lo que necesitas?",etapa:"producto_encontrado",items_resultado:null,cliente:null},
+    bitrix_payload_preview:{botId:456,dialogId:"chat-controlado-001",fields:{message:"encontré una opción del catálogo que puede cubrir tu necesidad:\n\nCódigo: LAB-001\nReferencia: BOMBA-LAB-10HP\nNombre: Bomba centrífuga de ensayo controlado\nMarca: Marca fixture\nDescripción: Bomba para agua limpia, 10 HP\nExistencia: Fixture local\nStock total: 0\n\n¿Este producto cubre lo que necesitas?"}},
+    output_content_hash:"b6bebc00055a9ea5851641e19277738f8e95ff1b447abe7babf76ab36180ee0d",
+    conversation_turns:[
+      {role:"user",label:"Cliente · turno 1",content:"Necesito una bomba centrífuga para agua limpia, 10 HP."},
+      {role:"assistant",label:"NIA Next · turno 1 procesado",content:"encontré una opción del catálogo que puede cubrir tu necesidad:\n\nCódigo: LAB-001\nReferencia: BOMBA-LAB-10HP\nNombre: Bomba centrífuga de ensayo controlado\nMarca: Marca fixture\nDescripción: Bomba para agua limpia, 10 HP\nExistencia: Fixture local\nStock total: 0\n\n¿Este producto cubre lo que necesitas?"}
+    ],
+    workflow_guard:{initial_mode:"shadow",observed_modes:["shadow"],requires_input_approval:false,requires_output_approval:false,bitrix_send_allowed:false},
+    shadow_result:{status:"shadowed",reason:"bitrix_suppressed_by_shadow",bitrix_attempt_count:0,outbound_message_id:null}
+  });
+
+  const clone = value => JSON.parse(JSON.stringify(value));
+  const secondResponse = "encontré un producto relacionado en el catálogo, pero necesito confirmar antes de tomarlo como solución:\n\nCódigo: LAB-002\nReferencia: BOMBA-LAB-30M3H\nNombre: Bomba centrífuga candidata para validación\nMarca: Marca fixture\nDescripción: Candidata controlada para 30 m³/h y 25 mca\nExistencia: Fixture local\nStock total: 0\n\nMotivo: El catálogo controlado la considera candidata, pero el punto de operación requiere validación técnica.\n\n¿Puedes confirmar si los 25 mca incluyen todas las pérdidas?";
+  const secondFixtureDetail = Object.freeze({
+    ...clone(firstFixtureDetail),
+    event_key:"a198b404d78977f8238da11ba0b562e8cc548fac2d45bfd179fbe2f63769be03",status:"shadowed",received_at:"2026-07-21T15:01:00Z",updated_at:"2026-07-21T15:01:02Z",
+    original_event_redacted:{...clone(firstFixtureDetail.original_event_redacted),"data[message][id]":"9002","data[message][text]":"¿También funciona para 30 m³/h y 25 mca?"},
+    normalized_message:{...clone(firstFixtureDetail.normalized_message),message_id:9002,text:"¿También funciona para 30 m³/h y 25 mca?"},
+    attachment_manifest:{transformations:[],signals:[],blocking_reasons:[],attachment_status:"not_present",attachment_count:0},
+    nia_payload:{session_id:"bitrix:member-demo:chat-controlado-001",mensaje:"¿También funciona para 30 m³/h y 25 mca?"},
+    input_content_hash:"b2f0336fd3d8f7ab036c36a47ebc5cc4fe076d1b887871724143649989384925",
+    nia_response:{respuesta:secondResponse,etapa:"validando_relacionado",items_resultado:null,cliente:null},
+    bitrix_payload_preview:{botId:456,dialogId:"chat-controlado-001",fields:{message:secondResponse}},
+    output_content_hash:"7d3b4dca2ea552dab20df417e8b97ebb0e50043619bb1dce069be22f095ab043",
+    conversation_turns:[
+      ...clone(firstFixtureDetail.conversation_turns),
+      {role:"user",label:"Cliente · turno 2 · misma sesión",content:"¿También funciona para 30 m³/h y 25 mca?"},
+      {role:"assistant",label:"NIA Next · turno 2 procesado",content:secondResponse}
+    ]
+  });
+  const fixtureDetails = Object.freeze([composedFixtureDetail,secondFixtureDetail,firstFixtureDetail]);
+  const fixtureAdapter = Object.freeze({
+    source:"fixture",
+    async listEvents(){return {returned:fixtureDetails.length,items:fixtureDetails.map((detail,index)=>({event_key:detail.event_key,status:detail.status,dialog_id:detail.normalized_message.dialog_id,updated_at:detail.updated_at||null,bitrix_written:false,turn_label:detail.turn_label||`Turno ${fixtureDetails.length-index}`}))};},
+    async getEvent(eventKey){const detail=fixtureDetails.find(item=>item.event_key===eventKey);return detail?clone(detail):null;}
+  });
+
+  const reviewLabController = Object.freeze({
+    async load(adapter,eventKey){
+      const events=await adapter.listEvents();
+      const selectedKey=eventKey||(events.items[0]&&events.items[0].event_key);
+      return Object.freeze({source:adapter.source,read_only:true,actions_enabled:false,events,selected:selectedKey?await adapter.getEvent(selectedKey):null});
+    }
+  });
+
+  const pretty = value => JSON.stringify(value,null,2);
+  function renderPilot(detail){
+    const evidence=detail.pilot_gate_evidence;const panel=document.getElementById("pilotPanel");panel.hidden=!evidence;if(!evidence)return;
+    const real=detail.real_safety||{};
+    document.getElementById("pilotRealState").textContent=`REAL: piloto ${real.pilot_enabled?"activo":"deshabilitado"} · parada ${real.pilot_emergency_stop?"activa":"inactiva"}`;
+    document.getElementById("pilotScenarioState").textContent=`ENSAYO: piloto activo · parada inactiva · ${evidence.source}`;
+    const identity=document.getElementById("pilotIdentity");identity.replaceChildren();
+    Object.entries(evidence.evaluated_identity).forEach(([name,value])=>{const item=document.createElement("div");const term=document.createElement("dt");term.textContent=name;const description=document.createElement("dd");description.textContent=String(value);item.append(term,description);identity.append(item);});
+    document.getElementById("pilotWindow").textContent=`Ventana UTC: ${evidence.window.valid_from} ≤ ${evidence.window.evaluated_at} < ${evidence.window.valid_until}`;
+    const gates=document.getElementById("pilotGates");gates.replaceChildren();
+    evidence.gates.forEach(item=>{const card=document.createElement("div");card.className=`gate ${item.status}`;const target=document.createElement("small");target.textContent=item.target;const status=document.createElement("strong");status.textContent=item.status==="allowed"?"PERMITIDA EN ENSAYO":"NO ALCANZADA";const checkpoint=document.createElement("span");checkpoint.textContent=item.checkpoint;const reason=document.createElement("code");reason.textContent=item.reason;const effect=document.createElement("span");effect.textContent=item.effect;card.append(target,status,checkpoint,reason,effect);gates.append(card);});
+    const matrix=document.getElementById("pilotMatrix");matrix.replaceChildren();
+    evidence.verified_cases.forEach(item=>{const card=document.createElement("div");card.className=`pilot-case ${item.status}`;const label=document.createElement("strong");label.textContent=item.label;const result=document.createElement("small");result.textContent=`${item.status.toUpperCase()} · ${item.reason}`;card.append(label,result);matrix.append(card);});
+  }
+  function render(snapshot){
+    const detail=snapshot.selected;if(!detail)return;
+    const selector=document.getElementById("eventSelector");selector.replaceChildren();
+    snapshot.events.items.forEach(item=>{const option=document.createElement("option");option.value=item.event_key;option.textContent=`${item.turn_label} · ${item.dialog_id} · ${item.status}`;selector.append(option);});
+    document.getElementById("statusBadge").textContent=`Estado: ${detail.status.toUpperCase()}`;
+    document.getElementById("evidenceType").textContent=detail.provenance.evidence_type;
+    document.getElementById("negotiationId").textContent=detail.provenance.negotiation_id||"NINGUNA · NO ES UNA NEGOCIACIÓN REAL";
+    document.getElementById("niaResponseOrigin").textContent=detail.provenance.nia_response_origin;
+    document.getElementById("labInfrastructure").textContent=detail.provenance.lab_infrastructure;
+    document.getElementById("contactId").textContent=detail.provenance.contact_id;
+    document.getElementById("channelName").textContent=detail.provenance.channel_name;
+    document.getElementById("dialogId").textContent=detail.provenance.dialog_id;
+    document.getElementById("realMode").textContent=`${(detail.real_safety&&detail.real_safety.effective_mode)||"off"} · locked · llamadas externas deshabilitadas`;
+    document.getElementById("scenarioMode").textContent=`${detail.workflow_guard.initial_mode} · solo dentro de la fixture`;
+    renderPilot(detail);
+    const journey=document.getElementById("journey");journey.replaceChildren();
+    (detail.journey||[
+      {stage:"received",status:"verified",detail:"Evento ficticio y secretos redactados."},
+      {stage:"preflight",status:"ready",detail:"Entrada exacta preparada."},
+      {stage:"nia",status:"core processed",detail:"Respuesta construida por NIA Next con infraestructura en memoria."},
+      {stage:"bitrix",status:"suppressed",detail:"Salida visible, nunca enviada."}
+    ]).forEach(item=>{const row=document.createElement("li");const stage=document.createElement("span");stage.textContent=item.stage;const status=document.createElement("b");status.textContent=item.status;const detailText=document.createElement("p");detailText.textContent=item.detail;row.append(stage,status,detailText);journey.append(row);});
+    const conversation=document.getElementById("conversation");conversation.replaceChildren();
+    detail.conversation_turns.forEach(turn=>{const bubble=document.createElement("div");bubble.className=`bubble${turn.role==="assistant"?" nia":""}`;const label=document.createElement("small");label.textContent=turn.label;const content=document.createElement("span");content.textContent=turn.content;bubble.append(label,content);conversation.append(bubble);});
+    [["originalEvent",detail.original_event_redacted],["normalizedMessage",detail.normalized_message],["attachmentManifest",detail.attachment_manifest],["niaPayload",detail.nia_payload],["niaResponse",detail.nia_response],["bitrixPreview",detail.bitrix_payload_preview],["workflowGuard",detail.workflow_guard],["dispatchResult",detail.dispatch_result||detail.shadow_result]].forEach(([id,value])=>document.getElementById(id).textContent=pretty(value));
+    document.getElementById("inputHash").textContent=`SHA-256: ${detail.input_content_hash}`;
+    document.getElementById("outputHash").textContent=`SHA-256: ${detail.output_content_hash}`;
+    document.getElementById("footer").textContent=`Evento ${detail.event_key} · ${detail.turn_label||"ensayo aislado"} · ninguna conexión externa real`;
+  }
+  async function refresh(){render(await reviewLabController.load(fixtureAdapter,document.getElementById("eventSelector").value||null));}
+  document.getElementById("refreshButton").addEventListener("click",refresh);
+  document.getElementById("eventSelector").addEventListener("change",refresh);
+  refresh();
+</script>
+</body>
+</html>
