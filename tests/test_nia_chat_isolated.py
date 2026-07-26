@@ -12,6 +12,7 @@ import ast
 import copy
 import hashlib
 import json
+import re
 import unittest
 from dataclasses import replace
 from datetime import datetime
@@ -47,6 +48,7 @@ from response_engine import (
 MAIN_PATH = Path(__file__).parents[1] / "main.py"
 CONTROLLED_MESSAGE = "Necesito una bomba centrífuga para agua limpia, 10 HP."
 PRODUCTION_FUNCTIONS = {
+    "detectar_identificador",
     "_marcar_respuesta_segura",
     "_extraer_respuesta_segura",
     "construir_respuesta_desde_resultado",
@@ -54,9 +56,18 @@ PRODUCTION_FUNCTIONS = {
     "procesar_turno",
     "nia_chat_texto",
 }
+PRODUCTION_GLOBALS = {
+    "CODIGO_RE",
+    "REFERENCIA_P_RE",
+    "REFERENCIA_ALFANUMERICA_COMPACTA_RE",
+    "REFERENCIA_ALFANUMERICA_EXPLICITA_RE",
+}
 
 
 class RecordingLogger:
+    def debug(self, *_args, **_kwargs):
+        return None
+
     def info(self, *_args, **_kwargs):
         return None
 
@@ -147,12 +158,36 @@ def _load_production_namespace(store, catalog, openai_attempts):
                 cloned = copy.deepcopy(node)
                 cloned.decorator_list = []
                 selected.append(cloned)
+        elif isinstance(node, ast.Assign):
+            assigned_names = {
+                target.id
+                for target in node.targets
+                if isinstance(target, ast.Name)
+            }
+            if assigned_names & PRODUCTION_GLOBALS:
+                selected.append(copy.deepcopy(node))
 
-    found = {node.name for node in selected}
+    found = {
+        node.name
+        for node in selected
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+    }
     if found != PRODUCTION_FUNCTIONS:
         raise AssertionError(
             "nia_isolated_missing_production_functions: "
             + ",".join(sorted(PRODUCTION_FUNCTIONS - found))
+        )
+    found_globals = {
+        target.id
+        for node in selected
+        if isinstance(node, ast.Assign)
+        for target in node.targets
+        if isinstance(target, ast.Name)
+    }
+    if found_globals != PRODUCTION_GLOBALS:
+        raise AssertionError(
+            "nia_isolated_missing_production_globals: "
+            + ",".join(sorted(PRODUCTION_GLOBALS - found_globals))
         )
 
     async def no_openai(*_args, **_kwargs):
@@ -177,6 +212,7 @@ def _load_production_namespace(store, catalog, openai_attempts):
         "ChatRequest": object,
         "ChatResponse": ChatResponseDouble,
         "datetime": datetime,
+        "re": re,
         "logger": RecordingLogger(),
         "get_session": store.get,
         "save_session": store.save,

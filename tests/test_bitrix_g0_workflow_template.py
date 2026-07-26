@@ -16,9 +16,9 @@ class G0WorkflowTemplateTests(unittest.TestCase):
     def test_template_is_inert_and_outside_active_workflows(self) -> None:
         self.assertTrue(TEMPLATE.is_file())
         self.assertNotIn(ACTIVE_WORKFLOWS, TEMPLATE.parents)
-        self.assertEqual(
+        self.assertCountEqual(
             [path.name for path in ACTIVE_WORKFLOWS.glob("*.y*ml")],
-            ["desarrollo_nia-v365.yml"],
+            ["desarrollo_nia-v365.yml", "main_nia-v365-next-api.yml"],
         )
 
     def test_only_manual_trigger_is_declared(self) -> None:
