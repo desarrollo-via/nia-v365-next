@@ -11,6 +11,10 @@ from .models import (
     ConnectorHealth,
     WebhookReceipt,
 )
+from .openline_r0_bridge_mount import (
+    R0_BRIDGE_EMBEDDED_PREFIX,
+    build_optional_r0_bridge_mount,
+)
 from .review_decision_http import (
     REVIEW_DECISION_MOUNT_PREFIX,
     build_review_decision_router,
@@ -39,6 +43,12 @@ router.include_router(
     )
 )
 router.include_router(create_audit_router())
+embedded_r0_bridge_mount = build_optional_r0_bridge_mount(
+    load_settings(),
+    prefix=R0_BRIDGE_EMBEDDED_PREFIX,
+)
+if embedded_r0_bridge_mount.router is not None:
+    router.include_router(embedded_r0_bridge_mount.router)
 
 
 async def start_connector_runtime() -> None:
@@ -96,4 +106,5 @@ async def bitrix_webhook(request: Request):
         request,
         settings_loader=load_settings,
         runtime=connector_runtime,
+        receipt_observer=embedded_r0_bridge_mount.receipt_observer,
     )

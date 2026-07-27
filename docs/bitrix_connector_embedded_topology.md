@@ -208,7 +208,8 @@ antes de su salida. La revisión confirmó:
 - jobs separados `build` y `deploy`;
 - login Azure mediante OIDC y `azure/webapps-deploy@v3` hacia
   `nia-v365-next-api`, slot `Production`;
-- ninguna prueba y ninguna instrucción que configure el startup.
+- el workflow original no tenía pruebas ni instrucciones que configuraran el
+  startup.
 
 Como el artefacto ya contiene `.`, `nia_process_launcher.py` viajará sin cambiar
 el empaquetado. La plantilla inerte
@@ -294,8 +295,17 @@ el bot o desvincular el Canal Abierto es una operación Bitrix independiente.
 7. Completado: diff inerte validado como 5 adiciones/0 eliminaciones, contexto
    cotejado con el YAML remoto redactado y 29/29 pruebas relacionadas aprobadas.
 8. Completado: proyección exclusiva confirmó que
-   `NIA_BITRIX_MODULE_ENABLED` está ausente y falla cerrado a `false`, sin
-   mostrar otras variables ni modificar Azure.
+`NIA_BITRIX_MODULE_ENABLED` está ausente y falla cerrado a `false`, sin
+mostrar otras variables ni modificar Azure.
+
+El corte R0 integrado añade ahora localmente la regresión completa
+`python -m unittest discover -s tests` al workflow activo después de instalar
+dependencias y antes de empaquetar. También monta el puente efímero desde
+`bitrix_connector/router.py`, que sí forma parte de `main:app`, usando un
+prefijo interno para evitar duplicación. Con el switch R0 apagado no añade
+rutas; con configuración exacta añade tres plantillas y cuatro operaciones.
+Las 38 pruebas focales y las 535 completas aprobaron con dobles. El workflow no
+se ejecutó y estos cambios no fueron publicados ni desplegados.
 9. Completado: inventario local separa 140 rutas funcionales, 8 de
    diseño/despliegue y 12 exclusivamente locales; el índice permanece vacío.
 10. Ejecutar la auditoría pre-stage de la allowlist: secretos sin imprimir
