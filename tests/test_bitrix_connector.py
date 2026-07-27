@@ -93,6 +93,30 @@ class ConnectorConfigTests(unittest.TestCase):
         self.assertEqual(configured.nia_base_url, "http://nia-next:8000/")
         self.assertFalse(configured.external_calls_enabled)
 
+    def test_r0_bridge_switch_is_strict_and_disabled_by_default(self):
+        default = load_settings({})
+        enabled = load_settings({"NIA_BITRIX_R0_BRIDGE_ENABLED": "true"})
+        invalid = load_settings({"NIA_BITRIX_R0_BRIDGE_ENABLED": "maybe"})
+
+        self.assertFalse(default.r0_bridge_enabled)
+        self.assertTrue(default.r0_bridge_configuration_valid)
+        self.assertTrue(enabled.r0_bridge_enabled)
+        self.assertTrue(enabled.r0_bridge_configuration_valid)
+        self.assertFalse(invalid.r0_bridge_enabled)
+        self.assertFalse(invalid.r0_bridge_configuration_valid)
+        self.assertIn("invalid_r0_bridge_enabled", invalid.warnings)
+
+    def test_g0_public_origin_is_only_loaded_and_never_enables_calls(self):
+        settings = load_settings(
+            {"NIA_BITRIX_G0_PUBLIC_ORIGIN": "  https://nia.example.test  "}
+        )
+
+        self.assertEqual(
+            settings.g0_public_origin,
+            "https://nia.example.test",
+        )
+        self.assertFalse(settings.external_calls_enabled)
+
 
 class EventParserTests(unittest.TestCase):
     def setUp(self):

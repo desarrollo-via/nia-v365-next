@@ -34,6 +34,17 @@ def safe_environ(**changes):
     return values
 
 
+def bridge_environ(**changes):
+    values = safe_environ(
+        NIA_BITRIX_R0_BRIDGE_ENABLED="true",
+        NIA_BITRIX_REVIEW_TOKEN="review-token-controlado-123456789",
+        NIA_BITRIX_REVIEW_ACTOR="hugo",
+        NIA_BITRIX_REVIEW_CREDENTIAL_ID="reviewer:hugo:r0",
+    )
+    values.update(changes)
+    return values
+
+
 class FakeConfig:
     def __init__(self, **values):
         self.values = values
@@ -144,6 +155,47 @@ class G0DeploymentCompositionTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(payload["pilot_enabled"])
         self.assertTrue(payload["pilot_emergency_stop"])
         self.assertNotIn("application-secret", health.text)
+        self.assertFalse(deployment.app.state.bitrix_g0_r0_bridge_enabled)
+        self.assertFalse(
+            deployment.app.state.bitrix_g0_optional_router_mounted
+        )
+
+    async def test_mounts_r0_bridge_only_with_independent_exact_switch(self):
+        deployment = compose_g0_deployment(
+            bridge_environ(),
+            config_factory=FakeConfig,
+            server_factory=FakeServer,
+        )
+        self.assertTrue(deployment.app.state.bitrix_g0_r0_bridge_enabled)
+        self.assertTrue(
+            deployment.app.state.bitrix_g0_optional_router_mounted
+        )
+
+        transport = httpx.ASGITransport(app=deployment.app)
+        async with httpx.AsyncClient(
+            transport=transport,
+            base_url=ORIGIN,
+        ) as client:
+            unauthorized = await client.get(
+                "/bitrix-connector/internal/r0-receipts/" + "a" * 64
+            )
+        self.assertEqual(unauthorized.status_code, 401)
+        self.assertNotIn("review-token-controlado", unauthorized.text)
+
+    def test_requested_r0_bridge_fails_before_app_on_invalid_configuration(self):
+        cases = (
+            bridge_environ(NIA_BITRIX_REVIEW_TOKEN=""),
+            bridge_environ(NIA_BITRIX_R0_BRIDGE_ENABLED="invalid"),
+        )
+        for environ in cases:
+            with self.subTest(environ=environ), self.assertRaises(
+                G0DeploymentConfigurationError
+            ):
+                compose_g0_deployment(
+                    environ,
+                    config_factory=FakeConfig,
+                    server_factory=FakeServer,
+                )
 
     def test_constructs_real_uvicorn_config_but_never_serves(self):
         deployment = compose_g0_deployment(

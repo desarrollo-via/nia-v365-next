@@ -52,6 +52,8 @@ class BotV2Summary(BaseModel):
     type: str = Field(min_length=1)
     isSupportOpenline: bool = False
     eventMode: str = Field(min_length=1)
+    isHidden: bool
+    isReactionsEnabled: bool
 
 
 class BotV2ListResult(BaseModel):
@@ -279,6 +281,8 @@ class BotV2PreflightInspector:
             existing.type == "openline"
             and existing.isSupportOpenline
             and existing.eventMode == "webhook"
+            and existing.isHidden
+            and not existing.isReactionsEnabled
         )
         return BotV2PreflightResult(
             status=(

@@ -6,7 +6,7 @@ from collections.abc import Callable
 from ipaddress import ip_address
 from urllib.parse import urlsplit
 
-from fastapi import FastAPI, Request
+from fastapi import APIRouter, FastAPI, Request
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from . import CONNECTOR_VERSION
@@ -18,7 +18,7 @@ from .g0_guard import (
     G0StopController,
 )
 from .models import WebhookReceipt
-from .webhook_handler import handle_bitrix_webhook
+from .webhook_handler import WebhookReceiptObserver, handle_bitrix_webhook
 
 
 G0_HEALTH_PATH = "/healthz"
@@ -64,6 +64,8 @@ def create_g0_entrypoint(
     limits: G0IngressLimits = G0IngressLimits(),
     stop_controller: G0StopController | None = None,
     clock: Callable[[], float] | None = None,
+    receipt_observer: WebhookReceiptObserver | None = None,
+    optional_router: APIRouter | None = None,
 ) -> FastAPI:
     """Expone solo salud y webhook sin runtime, startup o cliente externo."""
 
@@ -101,7 +103,11 @@ def create_g0_entrypoint(
             request,
             settings_loader=settings_loader,
             runtime=None,
+            receipt_observer=receipt_observer,
         )
+
+    if optional_router is not None:
+        app.include_router(optional_router)
 
     app.add_middleware(
         G0IngressGuardMiddleware,
@@ -120,6 +126,7 @@ def create_g0_entrypoint(
     app.state.bitrix_g0_limits = limits
     app.state.bitrix_g0_guard = guard
     app.state.bitrix_g0_stop_controller = stop
+    app.state.bitrix_g0_optional_router_mounted = optional_router is not None
     return app
 
 

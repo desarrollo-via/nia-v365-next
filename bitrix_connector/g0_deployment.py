@@ -18,6 +18,10 @@ from fastapi import FastAPI
 from .config import ConnectorMode, ConnectorSettings, load_settings
 from .g0_entrypoint import create_g0_entrypoint
 from .g0_guard import G0StopController
+from .openline_r0_bridge_mount import (
+    R0BridgeMountConfigurationError,
+    build_optional_r0_bridge_mount,
+)
 
 
 G0_PUBLIC_ORIGIN_ENV = "NIA_BITRIX_G0_PUBLIC_ORIGIN"
@@ -193,11 +197,16 @@ def compose_g0_deployment(
     config, settings = _deployment_inputs(environ)
     stop_controller = G0StopController()
     try:
+        bridge_mount = build_optional_r0_bridge_mount(settings)
         app = app_factory(
             public_origin=config.public_origin,
             settings_loader=lambda: settings,
             stop_controller=stop_controller,
+            receipt_observer=bridge_mount.receipt_observer,
+            optional_router=bridge_mount.router,
         )
+    except R0BridgeMountConfigurationError as exc:
+        raise G0DeploymentConfigurationError(str(exc)) from exc
     except ValueError as exc:
         raise G0DeploymentConfigurationError(
             "g0_deployment_public_origin_invalid"
@@ -230,6 +239,7 @@ def compose_g0_deployment(
     app.state.bitrix_g0_bind_host = config.bind_host
     app.state.bitrix_g0_bind_port = config.bind_port
     app.state.bitrix_g0_workers = config.workers
+    app.state.bitrix_g0_r0_bridge_enabled = bridge_mount.enabled
     return G0Deployment(
         app=app,
         config=config,

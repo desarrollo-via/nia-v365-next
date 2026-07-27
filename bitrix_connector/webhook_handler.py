@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from typing import Optional, Protocol
 
 from fastapi import Request
@@ -14,6 +14,7 @@ from .event_parser import parse_webhook_form
 from .idempotency import build_event_key
 from .models import (
     ConnectorIngestionStatus,
+    NormalizedBitrixEvent,
     WebhookEventSummary,
     WebhookReceipt,
 )
@@ -30,11 +31,18 @@ class WebhookRuntime(Protocol):
     ): ...
 
 
+WebhookReceiptObserver = Callable[
+    [NormalizedBitrixEvent, WebhookReceipt, ConnectorSettings],
+    Awaitable[None],
+]
+
+
 async def handle_bitrix_webhook(
     request: Request,
     *,
     settings_loader: Callable[[], ConnectorSettings],
     runtime: Optional[WebhookRuntime] = None,
+    receipt_observer: Optional[WebhookReceiptObserver] = None,
 ) -> WebhookReceipt | JSONResponse:
     """Valida el formulario y solo persiste si existe un runtime habilitado."""
 
@@ -126,6 +134,11 @@ async def handle_bitrix_webhook(
             is_system=event.is_system,
         ),
     )
+    if receipt_observer is not None:
+        try:
+            await receipt_observer(event, receipt, settings)
+        except Exception:
+            pass
     if http_status == 503:
         return JSONResponse(
             status_code=http_status,
@@ -135,4 +148,8 @@ async def handle_bitrix_webhook(
     return receipt
 
 
-__all__ = ["WebhookRuntime", "handle_bitrix_webhook"]
+__all__ = [
+    "WebhookReceiptObserver",
+    "WebhookRuntime",
+    "handle_bitrix_webhook",
+]

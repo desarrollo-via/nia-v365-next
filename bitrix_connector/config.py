@@ -24,6 +24,7 @@ class ConnectorSettings:
     effective_mode: ConnectorMode
     activation_locked: bool
     nia_base_url: Optional[str]
+    g0_public_origin: Optional[str]
     bitrix_domain: Optional[str]
     bitrix_member_id: Optional[str]
     bitrix_application_token: Optional[str]
@@ -39,6 +40,8 @@ class ConnectorSettings:
     bitrix_client_secret: Optional[str]
     installation_enabled: bool
     installation_configuration_valid: bool
+    r0_bridge_enabled: bool
+    r0_bridge_configuration_valid: bool
     pilot_enabled: bool
     pilot_emergency_stop: bool
     pilot_rules: tuple[PilotScopeRule, ...]
@@ -170,6 +173,10 @@ def load_settings(environ: Optional[Mapping[str, str]] = None) -> ConnectorSetti
         env.get("NIA_BITRIX_INSTALLATION_ENABLED"),
         default=False,
     )
+    r0_bridge_enabled, r0_bridge_enabled_valid = _strict_bool(
+        env.get("NIA_BITRIX_R0_BRIDGE_ENABLED"),
+        default=False,
+    )
 
     valid_modes = {mode.value for mode in ConnectorMode}
     if requested not in valid_modes:
@@ -187,12 +194,17 @@ def load_settings(environ: Optional[Mapping[str, str]] = None) -> ConnectorSetti
         pilot_configuration_valid = False
     if not installation_enabled_valid:
         warnings.append("invalid_installation_enabled")
+    if not r0_bridge_enabled_valid:
+        warnings.append("invalid_r0_bridge_enabled")
 
     return ConnectorSettings(
         requested_mode=requested,
         effective_mode=ConnectorMode.OFF,
         activation_locked=True,
         nia_base_url=_clean_optional(env.get("NIA_BASE_URL")),
+        g0_public_origin=_clean_optional(
+            env.get("NIA_BITRIX_G0_PUBLIC_ORIGIN")
+        ),
         bitrix_domain=_clean_optional(env.get("NIA_BITRIX_DOMAIN")),
         bitrix_member_id=_clean_optional(env.get("NIA_BITRIX_MEMBER_ID")),
         bitrix_application_token=_clean_optional(env.get("NIA_BITRIX_APPLICATION_TOKEN")),
@@ -218,6 +230,8 @@ def load_settings(environ: Optional[Mapping[str, str]] = None) -> ConnectorSetti
         bitrix_client_secret=_clean_optional(env.get("NIA_BITRIX_CLIENT_SECRET")),
         installation_enabled=installation_enabled,
         installation_configuration_valid=installation_enabled_valid,
+        r0_bridge_enabled=r0_bridge_enabled,
+        r0_bridge_configuration_valid=r0_bridge_enabled_valid,
         pilot_enabled=pilot_enabled,
         pilot_emergency_stop=pilot_emergency_stop,
         pilot_rules=pilot_rules,
