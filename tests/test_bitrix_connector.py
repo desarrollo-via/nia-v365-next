@@ -245,6 +245,15 @@ class ConnectorRouterTests(unittest.TestCase):
                 "configuration_valid": True,
             },
         )
+        self.assertEqual(
+            payload["r0_bridge"],
+            {
+                "requested": False,
+                "mounted": False,
+                "status": "disabled",
+                "reason": "r0_bridge_disabled",
+            },
+        )
         self.assertNotIn("secret-token", response.text)
         self.assertNotIn("review-secret", response.text)
         self.assertNotIn("mongo-password", response.text)

@@ -369,7 +369,7 @@ class R0ReceiptBridgeTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn(R0_BRIDGE_PREFIX, main_source)
         self.assertNotIn("build_r0_receipt_bridge_router", router_source)
         self.assertNotIn(R0_BRIDGE_PREFIX, router_source)
-        self.assertIn("build_optional_r0_bridge_mount", router_source)
+        self.assertIn("mount_optional_r0_bridge_fail_isolated", router_source)
         self.assertIn("R0_BRIDGE_EMBEDDED_PREFIX", router_source)
 
 
