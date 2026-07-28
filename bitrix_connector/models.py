@@ -54,6 +54,7 @@ class ConnectorHealth(BaseModel):
     runtime_resources_available: bool
     configured: dict[str, bool]
     pilot: dict[str, Any]
+    r0_bridge: dict[str, Any]
     warnings: list[str]
 
 

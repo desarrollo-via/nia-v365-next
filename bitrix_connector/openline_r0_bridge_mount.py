@@ -30,6 +30,18 @@ class R0BridgeMount:
     enabled: bool
     router: Optional[APIRouter] = None
     receipt_observer: Optional[WebhookReceiptObserver] = None
+    requested: bool = False
+    status: str = "disabled"
+    reason: str = "r0_bridge_disabled"
+
+
+_SAFE_CONFIGURATION_REASONS = frozenset(
+    {
+        "r0_bridge_switch_invalid",
+        "r0_bridge_safety_state_invalid",
+        "r0_bridge_review_auth_missing",
+    }
+)
 
 
 def build_optional_r0_bridge_mount(
@@ -80,7 +92,46 @@ def build_optional_r0_bridge_mount(
             prefix=prefix,
         ),
         receipt_observer=bridge.observe,
+        requested=True,
+        status="mounted",
+        reason="r0_bridge_mounted",
     )
+
+
+def mount_optional_r0_bridge_fail_isolated(
+    parent_router: APIRouter,
+    settings: ConnectorSettings,
+    *,
+    prefix: str = R0_BRIDGE_PREFIX,
+    bridge_factory: Callable[[], InMemoryR0ReceiptBridge] = (
+        InMemoryR0ReceiptBridge
+    ),
+) -> R0BridgeMount:
+    """Aísla errores de configuración R0 sin retirar las rutas del padre."""
+
+    try:
+        mount = build_optional_r0_bridge_mount(
+            settings,
+            prefix=prefix,
+            bridge_factory=bridge_factory,
+        )
+    except R0BridgeMountConfigurationError as exc:
+        candidate = str(exc)
+        reason = (
+            candidate
+            if candidate in _SAFE_CONFIGURATION_REASONS
+            else "r0_bridge_configuration_invalid"
+        )
+        return R0BridgeMount(
+            enabled=False,
+            requested=settings.r0_bridge_enabled,
+            status="unavailable",
+            reason=reason,
+        )
+
+    if mount.router is not None:
+        parent_router.include_router(mount.router)
+    return mount
 
 
 __all__ = [
@@ -88,4 +139,5 @@ __all__ = [
     "R0BridgeMountConfigurationError",
     "R0_BRIDGE_EMBEDDED_PREFIX",
     "build_optional_r0_bridge_mount",
+    "mount_optional_r0_bridge_fail_isolated",
 ]

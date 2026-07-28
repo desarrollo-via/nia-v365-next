@@ -1,5 +1,5 @@
 """Conector independiente entre Bitrix24 Open Lines y NIA Next."""
 
-CONNECTOR_VERSION = "v0.110"
+CONNECTOR_VERSION = "v0.111"
 
 __all__ = ["CONNECTOR_VERSION"]

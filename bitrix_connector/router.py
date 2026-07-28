@@ -13,7 +13,7 @@ from .models import (
 )
 from .openline_r0_bridge_mount import (
     R0_BRIDGE_EMBEDDED_PREFIX,
-    build_optional_r0_bridge_mount,
+    mount_optional_r0_bridge_fail_isolated,
 )
 from .review_decision_http import (
     REVIEW_DECISION_MOUNT_PREFIX,
@@ -43,12 +43,11 @@ router.include_router(
     )
 )
 router.include_router(create_audit_router())
-embedded_r0_bridge_mount = build_optional_r0_bridge_mount(
+embedded_r0_bridge_mount = mount_optional_r0_bridge_fail_isolated(
+    router,
     load_settings(),
     prefix=R0_BRIDGE_EMBEDDED_PREFIX,
 )
-if embedded_r0_bridge_mount.router is not None:
-    router.include_router(embedded_r0_bridge_mount.router)
 
 
 async def start_connector_runtime() -> None:
@@ -90,6 +89,12 @@ async def connector_health() -> ConnectorHealth:
         runtime_resources_available=runtime.resources_available,
         configured=settings.configured,
         pilot=settings.pilot_summary,
+        r0_bridge={
+            "requested": embedded_r0_bridge_mount.requested,
+            "mounted": embedded_r0_bridge_mount.enabled,
+            "status": embedded_r0_bridge_mount.status,
+            "reason": embedded_r0_bridge_mount.reason,
+        },
         warnings=list(settings.warnings),
     )
 
