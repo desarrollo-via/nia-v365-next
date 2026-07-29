@@ -1,10 +1,14 @@
 import io
+import os
 import unittest
 from contextlib import redirect_stdout
-from unittest.mock import AsyncMock, Mock
+from unittest.mock import AsyncMock, Mock, patch
 
 from bitrix_connector.config import load_settings
 from bitrix_connector.openline_r0_cli import (
+    LOCAL_DOTENV_SETTINGS_SOURCE,
+    PROCESS_ENVIRONMENT_SETTINGS_SOURCE,
+    _load_process_environment_settings,
     build_http_r0_receipt_gate,
     build_parser,
     execute_cli_once,
@@ -59,16 +63,63 @@ def restored_result():
 
 
 class ControlledR0CliTests(unittest.IsolatedAsyncioTestCase):
-    def test_parser_requires_only_exact_confirmation_and_timeout(self):
+    def test_parser_requires_exact_confirmation_and_defaults_to_local_dotenv(self):
         parser = build_parser()
         parsed = parser.parse_args(
             ["--confirm-code", CONTROLLED_R0_CONFIRMATION]
         )
         self.assertEqual(parsed.confirm_code, CONTROLLED_R0_CONFIRMATION)
+        self.assertEqual(
+            parsed.settings_source,
+            LOCAL_DOTENV_SETTINGS_SOURCE,
+        )
         destinations = {
             action.dest for action in parser._actions if action.dest != "help"
         }
-        self.assertEqual(destinations, {"confirm_code", "timeout_seconds"})
+        self.assertEqual(
+            destinations,
+            {"confirm_code", "settings_source", "timeout_seconds"},
+        )
+
+    def test_parser_accepts_only_explicit_process_environment_source(self):
+        parser = build_parser()
+        parsed = parser.parse_args(
+            [
+                "--confirm-code",
+                CONTROLLED_R0_CONFIRMATION,
+                "--settings-source",
+                PROCESS_ENVIRONMENT_SETTINGS_SOURCE,
+            ]
+        )
+        self.assertEqual(
+            parsed.settings_source,
+            PROCESS_ENVIRONMENT_SETTINGS_SOURCE,
+        )
+        with self.assertRaises(SystemExit):
+            parser.parse_args(
+                [
+                    "--confirm-code",
+                    CONTROLLED_R0_CONFIRMATION,
+                    "--settings-source",
+                    "automatic",
+                ]
+            )
+
+    def test_process_environment_loader_uses_only_injected_environment(self):
+        fake_environment = {
+            "NIA_BITRIX_MODE": "off",
+            "NIA_BITRIX_R0_BRIDGE_ENABLED": "true",
+            "NIA_BITRIX_REVIEW_TOKEN": "review-token-controlado-123456789",
+        }
+        with patch.dict(os.environ, fake_environment, clear=True):
+            settings = _load_process_environment_settings()
+
+        self.assertEqual(settings.requested_mode, "off")
+        self.assertTrue(settings.r0_bridge_enabled)
+        self.assertEqual(
+            settings.review_token,
+            "review-token-controlado-123456789",
+        )
 
     async def test_cli_adapter_delegates_exactly_once(self):
         settings = safe_settings()
@@ -138,6 +189,32 @@ class ControlledR0CliTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn('"status": "restored"', text)
         self.assertNotIn("application-secret", text)
         self.assertNotIn("access_token", text)
+
+    def test_main_process_source_never_calls_local_dotenv_loader(self):
+        local_loader = Mock(side_effect=AssertionError("dotenv_loader_called"))
+        process_loader = Mock(return_value=safe_settings())
+        execute = AsyncMock(return_value=restored_result())
+        output = io.StringIO()
+
+        with redirect_stdout(output):
+            exit_code = main(
+                [
+                    "--confirm-code",
+                    CONTROLLED_R0_CONFIRMATION,
+                    "--settings-source",
+                    PROCESS_ENVIRONMENT_SETTINGS_SOURCE,
+                ],
+                settings_loader=local_loader,
+                process_environment_settings_loader=process_loader,
+                receipt_gate_factory=Mock(return_value=Mock()),
+                execute_once=execute,
+            )
+
+        self.assertEqual(exit_code, 0)
+        local_loader.assert_not_called()
+        process_loader.assert_called_once_with()
+        execute.assert_awaited_once()
+        self.assertNotIn("application-secret", output.getvalue())
 
     def test_main_reduces_exception_to_redacted_failure(self):
         execute = AsyncMock(side_effect=RuntimeError("oauth-secret-detail"))

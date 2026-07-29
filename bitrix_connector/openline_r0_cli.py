@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import os
 from collections.abc import Awaitable, Callable, Sequence
 from pathlib import Path
 from typing import Optional
@@ -25,6 +26,8 @@ from .review_auth import SingleReviewerAuthenticator
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 ENV_PATH = PROJECT_ROOT / ".env"
+LOCAL_DOTENV_SETTINGS_SOURCE = "local-dotenv"
+PROCESS_ENVIRONMENT_SETTINGS_SOURCE = "process-environment"
 
 
 def build_http_r0_receipt_gate(
@@ -79,6 +82,14 @@ def build_parser() -> argparse.ArgumentParser:
         required=True,
         choices=[CONTROLLED_R0_CONFIRMATION],
     )
+    parser.add_argument(
+        "--settings-source",
+        choices=[
+            LOCAL_DOTENV_SETTINGS_SOURCE,
+            PROCESS_ENVIRONMENT_SETTINGS_SOURCE,
+        ],
+        default=LOCAL_DOTENV_SETTINGS_SOURCE,
+    )
     parser.add_argument("--timeout-seconds", type=float, default=10.0)
     return parser
 
@@ -90,6 +101,12 @@ def _load_local_settings() -> ConnectorSettings:
         if value is not None
     }
     return load_settings(values)
+
+
+def _load_process_environment_settings() -> ConnectorSettings:
+    """Carga App Settings ya inyectados sin abrir ni combinar `.env`."""
+
+    return load_settings(os.environ)
 
 
 async def execute_cli_once(
@@ -114,6 +131,9 @@ def main(
     argv: Optional[Sequence[str]] = None,
     *,
     settings_loader: Callable[[], ConnectorSettings] = _load_local_settings,
+    process_environment_settings_loader: Callable[
+        [], ConnectorSettings
+    ] = _load_process_environment_settings,
     receipt_gate_factory: Callable[
         [ConnectorSettings], Optional[R0ReceiptGate]
     ] = build_http_r0_receipt_gate,
@@ -123,7 +143,12 @@ def main(
 ) -> int:
     args = build_parser().parse_args(argv)
     try:
-        settings = settings_loader()
+        selected_settings_loader = (
+            process_environment_settings_loader
+            if args.settings_source == PROCESS_ENVIRONMENT_SETTINGS_SOURCE
+            else settings_loader
+        )
+        settings = selected_settings_loader()
         result = asyncio.run(
             execute_once(
                 confirmation=args.confirm_code,
