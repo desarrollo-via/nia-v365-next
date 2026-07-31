@@ -1,8 +1,8 @@
 # Diseño inerte de observación Wazzup para R0
 
-Estado: **CONTRATO Y ASGI LOCAL IMPLEMENTADOS · DESMONTADOS · NO AUTORIZA ACTIVACIÓN**
+Estado: **ARNÉS HOST LOCAL FAIL-CLOSED IMPLEMENTADO · SWITCH FALSE · NO AUTORIZA ACTIVACIÓN**
 
-Estado Git del corte: **COMMIT LOCAL CREADO · PUBLICACIÓN NO AUTORIZADA**
+Estado Git del corte actual: **CAMBIOS LOCALES SIN COMMIT · PUBLICACIÓN NO AUTORIZADA**
 
 ## Decisión
 
@@ -75,6 +75,43 @@ importada por `main.py`, el router o workflows y no inicia FastAPI, servidor,
 socket o recurso externo. La autenticación se comprueba antes de leer el cuerpo
 y el adaptador vuelve a verificar las mismas cabeceras antes de validar el
 payload, conservando un fallo cerrado en ambas fronteras.
+
+## Arnés host fail-closed
+
+`optional_wazzup_r0_ingress.py` agrega una frontera diferida entre la aplicación
+host y el ASGI inerte. Con el switch ausente o `false` no importa el paquete ni
+agrega middleware. Un valor distinto de `true`/`false`, un import fallido, una
+composición incompleta o un error de montaje deja la ruta ausente y expone solo
+razones fijas; los logs conservan únicamente el tipo de excepción.
+
+Cuando una prueba inyecta identidad y autenticador sintéticos, el arnés agrega
+un dispatcher ASGI que intercepta exclusivamente
+`/bitrix-connector/internal/wazzup-r0`. El dispatcher no lee ni transforma el
+cuerpo: entrega la solicitud al ingreso existente, que autentica antes del
+primer `receive()`. Cualquier otra ruta o evento ASGI continúa hacia FastAPI sin
+cambio.
+
+`main.py` llama el puente sin `WazzupR0Scope` ni `header_verifier` reales. Por
+ello, incluso si el switch llegara a `true`, la composición queda
+`unavailable`, sin ruta. Esta decisión es deliberada: todavía no existe una
+identidad Wazzup verificada ni un contrato real de autenticidad, y no se
+reutiliza el token de Bitrix.
+
+La allowlist exacta de este segundo corte contiene siete rutas:
+
+1. `optional_wazzup_r0_ingress.py`
+2. `main.py`
+3. `bitrix_connector/__init__.py`
+4. `docs/wazzup_r0_passive_observation_design.md`
+5. `tests/test_optional_wazzup_r0_ingress.py`
+6. `tests/test_bitrix_wazzup_r0_ingress.py`
+7. `tests/test_bitrix_g0_entrypoint.py`
+
+`.env.example`, el adaptador, el ingreso ASGI, router, políticas, workflows y el
+runbook P1-B quedan fuera. El rollback local previo a commit consiste en
+revertir únicamente estas siete rutas hasta el árbol `b736020`; después de un
+commit futuro será un `git revert` de ese commit. Este corte no autoriza commit,
+push, despliegue o rollback externo.
 
 ## Auditoría local y allowlist Git
 

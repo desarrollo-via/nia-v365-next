@@ -250,9 +250,13 @@ class WazzupR0IngressCompositionTests(unittest.TestCase):
             with self.subTest(values=values), self.assertRaises(ValueError):
                 WazzupR0IngressLimits(**values)
 
-    def test_ingress_is_not_mounted_in_productive_surfaces(self):
+    def test_ingress_is_only_referenced_through_optional_host_bridge(self):
+        main_source = (ROOT / "main.py").read_text(encoding="utf-8")
+        self.assertIn("optional_wazzup_r0_ingress", main_source)
+        self.assertNotIn("bitrix_connector.wazzup_r0_ingress", main_source)
+        self.assertNotIn(WAZZUP_R0_INGRESS_PATH, main_source)
+
         for relative in (
-            "main.py",
             "bitrix_connector/router.py",
             "bitrix_connector/workflow_policy.py",
         ):

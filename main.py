@@ -123,6 +123,7 @@ from response_engine import (
     contiene_placeholder,
 )
 from optional_bitrix_connector import mount_optional_bitrix_connector
+from optional_wazzup_r0_ingress import mount_optional_wazzup_r0_ingress
 
 
 # ─────────────────────────────────────────────────────────────
@@ -187,6 +188,15 @@ app.state.bitrix_connector_module_status = bitrix_connector_mount.status.value
 logger.info(
     "Bitrix connector module status: %s",
     bitrix_connector_mount.status.value,
+)
+wazzup_r0_ingress_mount = mount_optional_wazzup_r0_ingress(
+    app,
+    logger=logger,
+)
+app.state.wazzup_r0_ingress_status = wazzup_r0_ingress_mount.status.value
+logger.info(
+    "Wazzup R0 ingress status: %s",
+    wazzup_r0_ingress_mount.status.value,
 )
 
 
