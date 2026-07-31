@@ -1,8 +1,19 @@
 # Diseño inerte de observación Wazzup para R0
 
-Estado: **ARNÉS HOST LOCAL FAIL-CLOSED IMPLEMENTADO · SWITCH FALSE · NO AUTORIZA ACTIVACIÓN**
+Estado: **CAMINO ARCHIVADO Y CONGELADO · WAZZUP FUERA DE R0 · CERO CONSULTAS EJECUTADAS**
 
-Estado Git del corte actual: **CAMBIOS LOCALES SIN COMMIT · PUBLICACIÓN NO AUTORIZADA**
+Estado operativo observado el `2026-07-31`: **NIA OK · 21/17/3 · OFF/LOCKED/NO-EXTERNAL · RUNTIME INERTE**
+
+## Decisión posterior — 8/18
+
+Este camino queda supersedido por
+`docs/bitrix_r0_history_observation_design.md`. NIA Next se conectará sólo con
+Bitrix para el primer ensayo controlado. No se usará la clave Sidecar indicada
+por la persona, no se ejecutarán los GET diseñados y no se cambiarán webhook,
+URI, suscripciones, canales o autenticación Wazzup.
+
+El resto de este documento se conserva únicamente como evidencia histórica del
+camino descartado; no constituye un siguiente paso ni una autorización.
 
 ## Decisión
 
@@ -38,7 +49,9 @@ Referencias públicas:
 
 - <https://wazzup24.com/help/api-en/connection-methods/>
 - <https://wazzup24.com/help/api-en/webhooks/>
+- <https://wazzup24.com/help/api-en/working-with-channels/>
 - <https://wazzup24.com/help/api/webhooks/>
+- <https://wazzup24.com/help/api/channels/>
 - <https://apidocs.bitrix24.com/api-reference/chat-bots/chat-bots-v2/index.html>
 
 ## Frontera local propuesta
@@ -150,28 +163,126 @@ ni asumir que una credencial Sidecar es intercambiable con la autenticación
 Bitrix. El contrato de autenticidad Wazzup deberá diseñarse y probarse por
 separado, sin almacenar o mostrar valores en fixtures, logs o documentación.
 
-## Preflight externo futuro
+## Preflight Wazzup protegido de solo lectura — diseño 6/18
 
-Ningún preflight externo queda autorizado por este diseño. Antes de proponer
-una suscripción real será indispensable:
+Este apartado diseña el preflight futuro, pero no lo autoriza ni lo ejecuta. La
+persona deberá indicar únicamente el tipo no secreto de credencial disponible:
+`sidecar_v3` o `client_v2`. El valor se introducirá por un canal protegido y no
+se mostrará, copiará, contará, validará en el chat ni persistirá en archivos.
+No se cargará `.env` y una misma credencial nunca se probará contra ambos
+contratos.
 
-- confirmar cuál contrato, v2 o v3, corresponde a la cuenta instalada;
-- consultar solo la presencia y forma del webhook Sidecar vigente, sin mostrar
-  URI, clave o valores;
-- demostrar que añadir una recepción paralela no reemplaza ni degrada una
-  integración existente;
-- identificar de forma verificable el `channelId` y `chatId` Wazzup del caso
-  controlado sin confundirlos con los identificadores Bitrix;
-- tener el endpoint inerte publicado, autenticado, esperando y probado antes de
-  cualquier cambio en Wazzup;
-- fijar snapshot anterior, cambio literal, ventana, comprobación y rollback.
+### Contratos mutuamente excluyentes
 
-La consulta protegida que use una credencial requerirá autorización específica.
-Cualquier `PATCH` de Wazzup es una mutación productiva y activa la barrera de
-dos confirmaciones textuales, precisas y separadas. El rollback deberá restaurar
-literalmente la URI y las suscripciones anteriores y verificarlas mediante una
-lectura posterior. Un estado previo desconocido o una restauración no verificable
-impone `NO-GO`.
+**Sidecar/User API v3**, para la clave Sidecar creada por la integración
+existente de Bitrix:
+
+1. `GET https://api.wazzup24.com/v3/webhooks`.
+2. `GET https://api.wazzup24.com/v3/channels`.
+
+La primera respuesta debe tener únicamente la forma esperada de
+`webhooksUri + subscriptions`; la segunda, una lista de canales con
+`channelId`, `transport`, `plainId` y `state`. El contrato v3 ofrece una sola
+`webhooksUri`: si ya está configurada, añadir un receptor paralelo mediante
+`PATCH` la reemplazaría y el resultado del preflight será `NO-GO` para una
+recepción paralela sin un diseño adicional.
+
+**Tech Partner API v2**, únicamente para un `client_access_token` de la cuenta
+final:
+
+1. `GET https://tech.wazzup24.com/v2/webhooks`.
+2. `GET https://tech.wazzup24.com/v2/channels`.
+
+Ambas respuestas deben conservar la envoltura `data + meta`. Las suscripciones
+v2 tienen `id`, `url` y `event`; el canal usa `channel_id`, `transport` y
+`status`. La existencia de identificadores independientes permite inventariar
+suscripciones separadas, pero no prueba por sí sola que este contrato controle
+la instalación Bitrix/Sidecar vigente ni que acepte una duplicación segura del
+evento `message.add`.
+
+Un `401`, `403`, redirect, host distinto, forma ambigua o mezcla de nombres v2
+y v3 termina inmediatamente en `NO-GO`; no activa un intento alternativo.
+
+### Límites exactos
+
+- Exactamente dos solicitudes HTTPS `GET`, secuenciales y sin cuerpo.
+- Hosts allowlisted literalmente: `api.wazzup24.com` para v3 o
+  `tech.wazzup24.com` para v2; verificación TLS obligatoria y redirects
+  deshabilitados.
+- Timeout de conexión/lectura de 10 segundos por solicitud y máximo total de
+  30 segundos.
+- Cero reintentos, paginación, sondeos, llamadas paralelas o fallback de
+  contrato.
+- Máximo 256 KiB por respuesta; exceso, JSON inválido o claves duplicadas
+  termina en `NO-GO`.
+- Un único cliente HTTP efímero, cerrado en `finally`; cualquier error debe
+  terminar con `resources_closed=true` o quedar como fallo terminal visible.
+- Solo se permite `Authorization: Bearer <valor protegido>` y
+  `Accept: application/json`. No se registran cabeceras, cuerpos, URI vigentes,
+  teléfonos, nombres, identificadores o texto libre de errores.
+
+Quedan prohibidos `POST`, `PATCH`, `PUT`, `DELETE`, `sendMessage`, lectura de
+mensajes, historial, contactos, negocios, usuarios, plantillas, QR, archivos o
+cualquier endpoint no enumerado arriba.
+
+### Identidad y autenticidad
+
+El preflight recibe internamente tres valores esperados protegidos y separados:
+identidad del canal, `chatType` y `chatId` externo controlado. Nunca reutiliza
+`CONFIG_ID=13`, `chat78733`, `dialog_id=chat78733`, negociación `614949` o un
+identificador de bot como identidad Wazzup.
+
+La consulta de canales puede verificar que exista un único canal activo y que
+su identidad coincida con la esperada, pero no enumera chats ni demuestra por
+sí sola la existencia del `chatId` controlado. Para WhatsApp, el contrato v3
+documenta `chatId` como el identificador numérico del interlocutor; deberá
+provenir de una fuente humana protegida e independiente y quedar validado solo
+como booleano.
+
+Wazzup v3 documenta que agrega `Authorization: Bearer ${crmKey}` al webhook
+únicamente cuando dispone de `crmKey`. La documentación pública revisada no
+demuestra de forma inequívoca que el valor esperado por nuestro receptor sea
+intercambiable con la clave Sidecar usada para los GET. Por tanto el preflight
+de solo lectura debe informar `incoming_auth_equivalence_verified=false` salvo
+evidencia específica de la cuenta o del proveedor; nunca inferirá esa
+equivalencia ni reutilizará el token Bitrix.
+
+### Salida redactada
+
+La salida allowlisted contendrá únicamente:
+
+- `status`: `GO` o `NO-GO`;
+- `reason`: código fijo;
+- `contract_requested` y `contract_verified`;
+- `http_get_calls` y `mutation_calls`;
+- `webhook_read_ok`, `webhook_configured` y
+  `messages_subscription_enabled`;
+- `single_webhook_uri_model` o `independent_subscription_model`;
+- `channel_read_ok`, `channel_count`, `active_channel_count` y
+  `controlled_channel_unique`;
+- `chat_identity_source_present`, `chat_identity_verified` e
+  `incoming_auth_equivalence_verified`;
+- `parallel_reception_proven_safe` y `resources_closed`.
+
+No se mostrarán valores de URI, tokens, IDs, teléfonos, `plainId`, nombres,
+suscripciones, cabeceras, cuerpos, hashes o mensajes del proveedor.
+
+### GO/NO-GO
+
+`GO` exige contrato y formas exactos, dos GET exitosos, un único canal activo
+controlado, fuente protegida del `chatId`, autenticidad entrante demostrada,
+recepción paralela probada como no sustitutiva, cero mutaciones y recursos
+cerrados. Con la evidencia pública actual, v3 conserva un modelo de URI única y
+la equivalencia de autenticación entrante no está probada; esos resultados
+serán `NO-GO` seguro, no defectos que habiliten más consultas.
+
+Antes de proponer una suscripción real seguirá siendo obligatorio tener el
+endpoint inerte publicado, autenticado y esperando, además de fijar snapshot
+anterior, cambio literal, ventana, comprobación y rollback. Cualquier `PATCH`
+de Wazzup es una mutación productiva y activa dos confirmaciones textuales,
+precisas y separadas. El rollback deberá restaurar literalmente URI y
+suscripciones anteriores mediante una lectura posterior. Un estado previo
+desconocido o una restauración no verificable impone `NO-GO`.
 
 ## Operaciones congeladas
 
@@ -186,8 +297,6 @@ Hasta una nueva decisión expresa quedan prohibidos:
 
 ## Criterio de avance
 
-El contrato y la capa ASGI hermética están implementados, auditados y mantienen
-el switch apagado. El parser rechaza las constantes JSON no finitas y las ocho
-rutas exactas ya están preparadas en el índice. El siguiente avance requiere una
-autorización separada para crear únicamente un commit local; el índice actual no
-autoriza push, PR, despliegue, suscripción o mensaje.
+No existe avance operativo por Wazzup. El arnés desplegado permanece inerte, sin
+identidad, autenticador o ruta efectiva, y el receptor continúa ausente/404.
+Los GET, la preparación de credenciales y cualquier mutación quedan cancelados.
