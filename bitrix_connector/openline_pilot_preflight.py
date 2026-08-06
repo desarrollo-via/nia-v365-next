@@ -272,7 +272,24 @@ class OpenLinePreflightInspector:
         dialog_read = await self._client.get_dialog(chat_id)
         if dialog_read.decision is not OpenLineReadDecision.SUCCESS:
             return self._failure(dialog_read, chat_id, dialog_id)
-        dialog = dialog_read.dialog
+        return await self.inspect_dialog(
+            dialog=dialog_read.dialog,
+            chat_id=chat_id,
+            dialog_id=dialog_id,
+        )
+
+    async def inspect_dialog(
+        self,
+        *,
+        dialog: Optional[OpenLineDialog],
+        chat_id: int,
+        dialog_id: str,
+    ) -> OpenLinePreflightResult:
+        """Valida un diálogo ya leído y consume sólo config.get."""
+
+        expected_dialog = f"chat{chat_id}"
+        if chat_id <= 0 or dialog_id != expected_dialog:
+            raise ValueError("openline_controlled_identity_invalid")
         if (
             dialog is None
             or dialog.id != chat_id
