@@ -1,5 +1,6 @@
 import json
 import unittest
+from copy import deepcopy
 
 import httpx
 
@@ -115,6 +116,55 @@ class BitrixHistoryR0ClientTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(result.decision, BitrixHistoryReadDecision.FAIL)
                 self.assertEqual(result.error_code, expected)
                 self.assertNotIn("oauth-secret-token", repr(result))
+
+    async def test_classifies_history_shape_without_exposing_values(self):
+        canonical = {"result": history_payload()}
+        cases = []
+        cases.append((httpx.Response(200, content=b"not-json"),
+                      "bitrix_history_invalid_envelope"))
+
+        result_list = deepcopy(canonical)
+        result_list["result"] = [result_list["result"]]
+        cases.append((httpx.Response(200, json=result_list),
+                      "bitrix_history_invalid_envelope"))
+
+        message_object = deepcopy(canonical)
+        message = message_object["result"]["message"][0]
+        message_object["result"]["message"] = {"fixture": message}
+        cases.append((httpx.Response(200, json=message_object),
+                      "bitrix_history_invalid_collections"))
+
+        missing_session = deepcopy(canonical)
+        del missing_session["result"]["sessionId"]
+        cases.append((httpx.Response(200, json=missing_session),
+                      "bitrix_history_invalid_fields"))
+
+        sender_zero = deepcopy(canonical)
+        sender_zero["result"]["message"][0]["senderid"] = 0
+        cases.append((httpx.Response(200, json=sender_zero),
+                      "bitrix_history_invalid_fields"))
+
+        for response, expected in cases:
+            with self.subTest(expected=expected):
+                async def handler(_request, current=response):
+                    return current
+
+                http_client = httpx.AsyncClient(
+                    transport=httpx.MockTransport(handler)
+                )
+                self.addAsyncCleanup(http_client.aclose)
+                client = BitrixHistoryR0Client(
+                    portal_url="https://portal.bitrix24.test",
+                    access_token="oauth-secret-token",
+                    timeout_seconds=10,
+                    http_client=http_client,
+                )
+                result = await client.get_session_history(900)
+                self.assertEqual(result.decision, BitrixHistoryReadDecision.FAIL)
+                self.assertEqual(result.error_code, expected)
+                rendered = repr(result)
+                self.assertNotIn("oauth-secret-token", rendered)
+                self.assertNotIn("fixture", rendered)
 
 
 if __name__ == "__main__":
