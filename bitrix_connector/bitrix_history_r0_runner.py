@@ -6,7 +6,7 @@ import asyncio
 import math
 from datetime import datetime, timedelta
 from enum import Enum
-from typing import Awaitable, Callable, Literal, Protocol
+from typing import Awaitable, Callable, Protocol
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -29,17 +29,13 @@ STANDARD_WAIT_SECONDS = 180
 ABSOLUTE_MAX_WAIT_SECONDS = 300
 STANDARD_POLL_SECONDS = 5
 ABSOLUTE_MAX_POLLS = 60
+_ALLOWED_DIALOG_ROLES = {"client", "guest", "user"}
 
 
 class BitrixHistoryReader(Protocol):
     async def get_dialog(self, dialog_id: str) -> BitrixHistoryReadResult: ...
     async def get_session_history(self, session_id: int) -> BitrixHistoryReadResult: ...
     async def close(self) -> None: ...
-
-
-class BitrixHistoryAnchor(Protocol):
-    session_id: int
-    baseline_last_message_id: int
 
 
 class BitrixHistoryR0Status(str, Enum):
@@ -69,38 +65,6 @@ class BitrixHistoryR0Result(BaseModel):
     resources_closed: bool = False
 
 
-class BitrixHistoryR0WaitingMessageSnapshot(BaseModel):
-    """Señal pública cerrada: el lector está listo para iniciar el sondeo."""
-
-    model_config = ConfigDict(frozen=True, extra="forbid")
-
-    state: Literal["WAITING-MESSAGE"] = "WAITING-MESSAGE"
-    reason: Literal["bitrix_history_waiting_message"] = (
-        "bitrix_history_waiting_message"
-    )
-    reader_ready: Literal[True] = True
-    dialog_read_calls: Literal[0] = 0
-    history_read_calls: Literal[0] = 0
-    mutation_calls: Literal[0] = 0
-    connector_locked_off: Literal[True] = True
-    persisted: Literal[False] = False
-    nia_called: Literal[False] = False
-    bitrix_written: Literal[False] = False
-    resources_closed: Literal[False] = False
-
-
-WaitingMessageSignal = Callable[
-    [BitrixHistoryR0WaitingMessageSnapshot],
-    Awaitable[None],
-]
-
-
-async def _ignore_waiting_message(
-    _snapshot: BitrixHistoryR0WaitingMessageSnapshot,
-) -> None:
-    return None
-
-
 def _result(reason: str, **updates: object) -> BitrixHistoryR0Result:
     payload: dict[str, object] = {
         "status": BitrixHistoryR0Status.NO_GO,
@@ -124,25 +88,13 @@ def _barriers_safe(settings: ConnectorSettings) -> bool:
     )
 
 
-def _dialog_identity_checks(
-    dialog: BitrixHistoryDialog | None,
-) -> tuple[bool, bool, bool, bool] | None:
-    if dialog is None:
-        return None
-    return (
-        dialog.id == CONTROLLED_CHAT_ID,
-        dialog.dialog_id == CONTROLLED_DIALOG_ID,
-        dialog.entity_type.upper() == "LINES",
-        bool(dialog.role.strip()),
-    )
-
-
 def _verified_dialog(dialog: BitrixHistoryDialog | None) -> bool:
-    checks = _dialog_identity_checks(dialog)
     return bool(
-        checks is not None
-        and all(checks)
-        and dialog is not None
+        dialog is not None
+        and dialog.id == CONTROLLED_CHAT_ID
+        and dialog.dialog_id == CONTROLLED_DIALOG_ID
+        and dialog.entity_type.upper() == "LINES"
+        and dialog.role.strip().lower() in _ALLOWED_DIALOG_ROLES
         and dialog.last_message_id > 0
     )
 
@@ -310,174 +262,6 @@ async def execute_bitrix_history_r0_once(
             wait_seconds=wait_seconds,
             poll_seconds=poll_seconds,
             sleep=sleep,
-        )
-    finally:
-        try:
-            await client.close()
-        except Exception:
-            close_failed = True
-    if close_failed:
-        return result.model_copy(
-            update={
-                "status": BitrixHistoryR0Status.NO_GO,
-                "reason": "bitrix_history_resources_close_failed",
-                "resources_closed": False,
-            }
-        )
-    return result.model_copy(update={"resources_closed": True})
-
-
-async def _run_bitrix_history_r0_from_anchor_once(
-    *,
-    anchor: BitrixHistoryAnchor,
-    client: BitrixHistoryReader,
-    settings: ConnectorSettings,
-    expected_text_sha256: str,
-    window_start: datetime,
-    wait_seconds: int = STANDARD_WAIT_SECONDS,
-    poll_seconds: int = STANDARD_POLL_SECONDS,
-    sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
-    on_waiting_message: WaitingMessageSignal = _ignore_waiting_message,
-) -> BitrixHistoryR0Result:
-    """Sondea desde un ancla ya capturada, sin repetir la lectura baseline."""
-
-    if not _barriers_safe(settings):
-        return _result("bitrix_history_barrier_degraded")
-    if (
-        window_start.tzinfo is None
-        or window_start.utcoffset() is None
-        or wait_seconds <= 0
-        or wait_seconds > ABSOLUTE_MAX_WAIT_SECONDS
-        or poll_seconds < STANDARD_POLL_SECONDS
-    ):
-        return _result("bitrix_history_window_invalid")
-    try:
-        session_id = anchor.session_id
-        baseline_id = anchor.baseline_last_message_id
-    except Exception:
-        return _result("bitrix_history_anchor_invalid")
-    if session_id <= 0 or baseline_id <= 0:
-        return _result("bitrix_history_anchor_invalid")
-
-    dialog_calls = 0
-    poll_count = min(math.ceil(wait_seconds / poll_seconds), ABSOLUTE_MAX_POLLS)
-    window_end = window_start + timedelta(seconds=wait_seconds)
-    try:
-        await on_waiting_message(BitrixHistoryR0WaitingMessageSnapshot())
-        for _ in range(poll_count):
-            await sleep(poll_seconds)
-            current_read = await client.get_dialog(CONTROLLED_DIALOG_ID)
-            dialog_calls += 1
-            current = current_read.dialog
-            if (
-                current_read.decision is not BitrixHistoryReadDecision.SUCCESS
-                or not _verified_dialog(current)
-            ):
-                return _result(
-                    current_read.error_code or "bitrix_history_dialog_mismatch",
-                    dialog_read_calls=dialog_calls,
-                    baseline_captured=True,
-                )
-            try:
-                current_session_id = current.session_id
-            except ValueError:
-                current_session_id = 0
-            if current_session_id != session_id or current.last_message_id < baseline_id:
-                return _result(
-                    "bitrix_history_dialog_drift",
-                    dialog_read_calls=dialog_calls,
-                    dialog_verified=True,
-                    session_verified=True,
-                    baseline_captured=True,
-                )
-            if current.last_message_id == baseline_id:
-                continue
-
-            history_read = await client.get_session_history(session_id)
-            if (
-                history_read.decision is not BitrixHistoryReadDecision.SUCCESS
-                or history_read.history is None
-            ):
-                return _result(
-                    history_read.error_code or "bitrix_history_read_failed",
-                    dialog_read_calls=dialog_calls,
-                    history_read_calls=1,
-                    dialog_verified=True,
-                    session_verified=True,
-                    baseline_captured=True,
-                    new_last_message_detected=True,
-                )
-            selection = select_controlled_history_message(
-                history=history_read.history,
-                expected_chat_id=CONTROLLED_CHAT_ID,
-                expected_dialog_id=CONTROLLED_DIALOG_ID,
-                expected_session_id=session_id,
-                baseline_message_id=baseline_id,
-                expected_text_sha256=expected_text_sha256,
-                window_start=window_start,
-                window_end=window_end,
-            )
-            received = selection.status is HistoryR0SelectionStatus.SELECTED
-            return BitrixHistoryR0Result(
-                status=(
-                    BitrixHistoryR0Status.RECEIVED
-                    if received
-                    else BitrixHistoryR0Status.NO_GO
-                ),
-                reason=selection.reason,
-                dialog_read_calls=dialog_calls,
-                history_read_calls=1,
-                dialog_verified=True,
-                session_verified=True,
-                baseline_captured=True,
-                new_last_message_detected=True,
-                candidate_count=selection.candidate_count,
-                controlled_message_verified=received,
-            )
-        return _result(
-            "bitrix_history_wait_timeout",
-            dialog_read_calls=dialog_calls,
-            dialog_verified=dialog_calls > 0,
-            session_verified=dialog_calls > 0,
-            baseline_captured=True,
-        )
-    except asyncio.CancelledError:
-        raise
-    except Exception:
-        return _result(
-            "bitrix_history_runner_failed",
-            dialog_read_calls=dialog_calls,
-            baseline_captured=True,
-        )
-
-
-async def execute_bitrix_history_r0_from_anchor_once(
-    *,
-    anchor: BitrixHistoryAnchor,
-    client: BitrixHistoryReader,
-    settings: ConnectorSettings,
-    expected_text_sha256: str,
-    window_start: datetime,
-    wait_seconds: int = STANDARD_WAIT_SECONDS,
-    poll_seconds: int = STANDARD_POLL_SECONDS,
-    sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
-    on_waiting_message: WaitingMessageSignal = _ignore_waiting_message,
-) -> BitrixHistoryR0Result:
-    """Usa una sola ancla previa y cierra siempre el lector inyectado."""
-
-    result: BitrixHistoryR0Result | None = None
-    close_failed = False
-    try:
-        result = await _run_bitrix_history_r0_from_anchor_once(
-            anchor=anchor,
-            client=client,
-            settings=settings,
-            expected_text_sha256=expected_text_sha256,
-            window_start=window_start,
-            wait_seconds=wait_seconds,
-            poll_seconds=poll_seconds,
-            sleep=sleep,
-            on_waiting_message=on_waiting_message,
         )
     finally:
         try:

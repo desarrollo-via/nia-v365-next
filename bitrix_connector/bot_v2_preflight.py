@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import Enum
 from ipaddress import ip_address
-from typing import Callable, Literal, Optional
+from typing import Optional
 
 import httpx
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
@@ -21,18 +21,6 @@ BITRIX_V2_REVISION_PATH = "/rest/imbot.v2.Revision.get"
 BITRIX_V2_BOT_LIST_PATH = "/rest/imbot.v2.Bot.list"
 BITRIX_V2_BOT_REGISTER_METHOD = "imbot.v2.Bot.register"
 CONTROLLED_BOT_CODE = "nia_next_openline_controlled"
-BotV2InspectionStage = Literal[
-    "bot_revision_stage",
-    "bot_revision_transport_stage",
-    "bot_revision_remote_stage",
-    "bot_revision_token_expired_stage",
-    "bot_revision_retryable_stage",
-    "bot_revision_permanent_stage",
-    "bot_revision_contract_stage",
-    "bot_list_stage",
-    "bot_contract_stage",
-]
-BotV2StageObserver = Callable[[BotV2InspectionStage], None]
 _RETRYABLE_CODES = {
     "QUERY_LIMIT_EXCEEDED",
     "INTERNAL_SERVER_ERROR",
@@ -261,32 +249,16 @@ class BotV2PreflightResult(BaseModel):
 
 
 class BotV2PreflightInspector:
-    def __init__(
-        self,
-        client: BitrixBotV2PreflightClient,
-        *,
-        stage_observer: Optional[BotV2StageObserver] = None,
-    ) -> None:
-        if stage_observer is not None and not callable(stage_observer):
-            raise TypeError("bot_v2_stage_observer_invalid")
+    def __init__(self, client: BitrixBotV2PreflightClient) -> None:
         self._client = client
-        self._stage_observer = stage_observer
-
-    def _observe(self, stage: BotV2InspectionStage) -> None:
-        if self._stage_observer is not None:
-            self._stage_observer(stage)
 
     async def inspect(self) -> BotV2PreflightResult:
-        self._observe("bot_revision_stage")
         revision = await self._client.get_revision()
         if revision.decision is not BotV2PreflightDecision.SUCCESS:
-            self._observe(self._revision_failure_stage(revision))
             return self._failure(revision)
-        self._observe("bot_list_stage")
         bots = await self._client.list_bots()
         if bots.decision is not BotV2PreflightDecision.SUCCESS:
             return self._failure(bots)
-        self._observe("bot_contract_stage")
         if bots.has_next_page:
             return BotV2PreflightResult(
                 status=BotV2PreflightStatus.PAGINATION_REQUIRED,
@@ -327,25 +299,6 @@ class BotV2PreflightInspector:
             existing_bot_id=existing.id,
             registration_needed=False,
         )
-
-    @staticmethod
-    def _revision_failure_stage(
-        call: BotV2PreflightCallResult,
-    ) -> BotV2InspectionStage:
-        if call.error_code in {
-            "bot_v2_preflight_timeout",
-            "bot_v2_preflight_transport_error",
-        }:
-            return "bot_revision_transport_stage"
-        if call.error_code == "bot_v2_preflight_invalid_response":
-            return "bot_revision_contract_stage"
-        if call.error_code == "bot_v2_preflight_token_expired":
-            return "bot_revision_token_expired_stage"
-        if call.error_code == "bot_v2_preflight_retryable":
-            return "bot_revision_retryable_stage"
-        if call.error_code == "bot_v2_preflight_permanent":
-            return "bot_revision_permanent_stage"
-        return "bot_revision_remote_stage"
 
     @staticmethod
     def _failure(call: BotV2PreflightCallResult) -> BotV2PreflightResult:

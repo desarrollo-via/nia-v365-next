@@ -18,11 +18,7 @@ from .g0_guard import (
     G0StopController,
 )
 from .models import WebhookReceipt
-from .webhook_handler import (
-    ProtectedWebhookOAuthObserver,
-    WebhookReceiptObserver,
-    handle_bitrix_webhook,
-)
+from .webhook_handler import WebhookReceiptObserver, handle_bitrix_webhook
 
 
 G0_HEALTH_PATH = "/healthz"
@@ -69,7 +65,6 @@ def create_g0_entrypoint(
     stop_controller: G0StopController | None = None,
     clock: Callable[[], float] | None = None,
     receipt_observer: WebhookReceiptObserver | None = None,
-    protected_oauth_observer: ProtectedWebhookOAuthObserver | None = None,
     optional_router: APIRouter | None = None,
 ) -> FastAPI:
     """Expone solo salud y webhook sin runtime, startup o cliente externo."""
@@ -109,7 +104,6 @@ def create_g0_entrypoint(
             settings_loader=settings_loader,
             runtime=None,
             receipt_observer=receipt_observer,
-            protected_oauth_observer=protected_oauth_observer,
         )
 
     if optional_router is not None:

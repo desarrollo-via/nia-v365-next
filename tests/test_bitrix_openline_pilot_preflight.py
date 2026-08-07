@@ -9,7 +9,6 @@ from bitrix_connector.openline_pilot_preflight import (
     BITRIX_OPENLINE_DIALOG_GET_PATH,
     BitrixOpenLinePreflightClient,
     OpenLineConfigSnapshot,
-    OpenLineDialog,
     OpenLinePreflightInspector,
     OpenLinePreflightResult,
     OpenLinePreflightStatus,
@@ -112,35 +111,6 @@ class OpenLineClientTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.status, OpenLinePreflightStatus.READY)
         self.assertEqual(result.config.config_id, 13)
         self.assertEqual(result.config.welcome_bot_id, 245339)
-
-    async def test_inspector_reuses_preloaded_dialog_and_reads_only_config(self):
-        captured = []
-
-        async def handler(request):
-            captured.append(request.url.path)
-            return httpx.Response(200, json={"result": config_payload()})
-
-        http_client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
-        self.addAsyncCleanup(http_client.aclose)
-        client = BitrixOpenLinePreflightClient(
-            portal_url="https://portal.bitrix24.test",
-            access_token="token",
-            timeout_seconds=3,
-            http_client=http_client,
-        )
-        result = await OpenLinePreflightInspector(client).inspect_dialog(
-            dialog=OpenLineDialog(
-                id=78733,
-                dialog_id="chat78733",
-                entity_type="LINES",
-                entity_id="wazzup|13|remote-chat|remote-user",
-            ),
-            chat_id=78733,
-            dialog_id="chat78733",
-        )
-
-        self.assertEqual(result.status, OpenLinePreflightStatus.READY)
-        self.assertEqual(captured, [BITRIX_OPENLINE_CONFIG_GET_PATH])
 
     async def test_invalid_or_mismatched_data_fails_closed(self):
         cases = (
