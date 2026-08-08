@@ -21,6 +21,7 @@ _RETRYABLE_CODES = {
     "ERROR_UNEXPECTED_ANSWER",
     "OVERLOAD_LIMIT",
 }
+_HISTORY_COLLECTION_FIELDS = frozenset({"message", "messages", "users"})
 
 
 class BitrixHistoryDialog(BaseModel):
@@ -29,6 +30,7 @@ class BitrixHistoryDialog(BaseModel):
     id: int = Field(gt=0)
     dialog_id: str = Field(pattern=r"^chat[1-9][0-9]*$")
     entity_type: str = Field(min_length=1)
+    entity_id: Optional[str] = None
     entity_data_1: str = Field(min_length=1)
     role: str = Field(min_length=1)
     last_message_id: int = Field(gt=0)
@@ -83,6 +85,30 @@ class _DialogResponse(BaseModel):
 class _HistoryResponse(BaseModel):
     model_config = ConfigDict(frozen=True, extra="ignore")
     result: BitrixSessionHistory
+
+
+def _history_validation_error_code(error: ValidationError) -> str:
+    """Clasifica sólo la ubicación estructural, nunca valores del cuerpo."""
+
+    collection_invalid = False
+    field_invalid = False
+    for issue in error.errors(
+        include_url=False,
+        include_context=False,
+        include_input=False,
+    ):
+        location = tuple(issue.get("loc") or ())
+        if not location or location[0] != "result" or len(location) == 1:
+            return "bitrix_history_invalid_envelope"
+        if location[1] in _HISTORY_COLLECTION_FIELDS and len(location) == 2:
+            collection_invalid = True
+        else:
+            field_invalid = True
+    if collection_invalid:
+        return "bitrix_history_invalid_collections"
+    if field_invalid:
+        return "bitrix_history_invalid_fields"
+    return "bitrix_history_invalid_response"
 
 
 class BitrixHistoryReadDecision(str, Enum):
@@ -164,9 +190,19 @@ class BitrixHistoryR0Client:
                 http_status=response.status_code,
             )
         try:
-            parsed = _HistoryResponse.model_validate(response.json())
-        except (ValueError, ValidationError):
-            return self._invalid_response(response.status_code)
+            payload = response.json()
+        except ValueError:
+            return self._failed(
+                "bitrix_history_invalid_envelope",
+                response.status_code,
+            )
+        try:
+            parsed = _HistoryResponse.model_validate(payload)
+        except ValidationError as exc:
+            return self._failed(
+                _history_validation_error_code(exc),
+                response.status_code,
+            )
         return BitrixHistoryReadResult(
             decision=BitrixHistoryReadDecision.SUCCESS,
             history=parsed.result,
