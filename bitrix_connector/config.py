@@ -42,6 +42,8 @@ class ConnectorSettings:
     installation_configuration_valid: bool
     r0_bridge_enabled: bool
     r0_bridge_configuration_valid: bool
+    event_r1_enabled: bool
+    event_r1_configuration_valid: bool
     pilot_enabled: bool
     pilot_emergency_stop: bool
     pilot_rules: tuple[PilotScopeRule, ...]
@@ -177,6 +179,10 @@ def load_settings(environ: Optional[Mapping[str, str]] = None) -> ConnectorSetti
         env.get("NIA_BITRIX_R0_BRIDGE_ENABLED"),
         default=False,
     )
+    event_r1_enabled, event_r1_enabled_valid = _strict_bool(
+        env.get("NIA_BITRIX_EVENT_R1_ENABLED"),
+        default=False,
+    )
 
     valid_modes = {mode.value for mode in ConnectorMode}
     if requested not in valid_modes:
@@ -196,6 +202,8 @@ def load_settings(environ: Optional[Mapping[str, str]] = None) -> ConnectorSetti
         warnings.append("invalid_installation_enabled")
     if not r0_bridge_enabled_valid:
         warnings.append("invalid_r0_bridge_enabled")
+    if not event_r1_enabled_valid:
+        warnings.append("invalid_event_r1_enabled")
 
     return ConnectorSettings(
         requested_mode=requested,
@@ -232,6 +240,8 @@ def load_settings(environ: Optional[Mapping[str, str]] = None) -> ConnectorSetti
         installation_configuration_valid=installation_enabled_valid,
         r0_bridge_enabled=r0_bridge_enabled,
         r0_bridge_configuration_valid=r0_bridge_enabled_valid,
+        event_r1_enabled=event_r1_enabled,
+        event_r1_configuration_valid=event_r1_enabled_valid,
         pilot_enabled=pilot_enabled,
         pilot_emergency_stop=pilot_emergency_stop,
         pilot_rules=pilot_rules,
