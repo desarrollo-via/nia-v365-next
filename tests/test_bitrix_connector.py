@@ -106,6 +106,20 @@ class ConnectorConfigTests(unittest.TestCase):
         self.assertFalse(invalid.r0_bridge_configuration_valid)
         self.assertIn("invalid_r0_bridge_enabled", invalid.warnings)
 
+    def test_event_r1_switch_is_strict_and_disabled_by_default(self):
+        default = load_settings({})
+        enabled = load_settings({"NIA_BITRIX_EVENT_R1_ENABLED": "true"})
+        invalid = load_settings({"NIA_BITRIX_EVENT_R1_ENABLED": "maybe"})
+
+        self.assertFalse(default.event_r1_enabled)
+        self.assertTrue(default.event_r1_configuration_valid)
+        self.assertTrue(enabled.event_r1_enabled)
+        self.assertTrue(enabled.event_r1_configuration_valid)
+        self.assertFalse(invalid.event_r1_enabled)
+        self.assertFalse(invalid.event_r1_configuration_valid)
+        self.assertIn("invalid_event_r1_enabled", invalid.warnings)
+        self.assertFalse(enabled.external_calls_enabled)
+
     def test_g0_public_origin_is_only_loaded_and_never_enables_calls(self):
         settings = load_settings(
             {"NIA_BITRIX_G0_PUBLIC_ORIGIN": "  https://nia.example.test  "}

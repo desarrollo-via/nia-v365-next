@@ -194,6 +194,15 @@ class EventScopedR1Gate:
             execution_enabled=self._execution_enabled,
         )
 
+    def close(self) -> None:
+        """Desarma referencias ejecutables sin habilitar una nueva tentativa."""
+
+        self._preflight = None
+        self._roundtrip = None
+        self._execution_enabled = False
+        if self._state not in ("VERIFIED", "ROLLED-BACK", "NO-GO"):
+            self._state = "NO-GO"
+
     def __repr__(self) -> str:
         return "EventScopedR1Gate(<redacted>)"
 

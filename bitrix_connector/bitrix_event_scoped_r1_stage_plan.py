@@ -15,7 +15,7 @@ from .bitrix_event_scoped_r1_cut_manifest import (
 
 M53_M86_STAGE_PHASE: Literal["M86-CI"] = "M86-CI"
 M53_M86_STAGE_ARGV_SHA256 = (
-    "f02db1a4ea89125cb0899741c9e09636684eeabfcf3e5562be0eaf815294ae2c"
+    "572cb444f980602d586caab48bc88bd3879114386a526e7e3e0270ea33f9b36c"
 )
 
 
