@@ -5,6 +5,9 @@ from fastapi import APIRouter, Request
 from . import CONNECTOR_VERSION
 from .audit_router import create_audit_router
 from .config import load_settings
+from .bitrix_event_scoped_r1_mount import (
+    build_dormant_event_scoped_r1_mount,
+)
 from .installation_router import create_installation_router
 from .installation_status_router import create_installation_status_router
 from .models import (
@@ -48,6 +51,7 @@ embedded_r0_bridge_mount = mount_optional_r0_bridge_fail_isolated(
     load_settings(),
     prefix=R0_BRIDGE_EMBEDDED_PREFIX,
 )
+event_scoped_r1_mount = build_dormant_event_scoped_r1_mount()
 
 
 async def start_connector_runtime() -> None:
@@ -112,4 +116,5 @@ async def bitrix_webhook(request: Request):
         settings_loader=load_settings,
         runtime=connector_runtime,
         receipt_observer=embedded_r0_bridge_mount.receipt_observer,
+        protected_oauth_observer=event_scoped_r1_mount.observer,
     )

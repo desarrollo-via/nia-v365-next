@@ -86,6 +86,27 @@ class BitrixHistoryR0AdapterTests(unittest.TestCase):
         selected = select(history_payload(messages=[base["message"][0], system]))
         self.assertEqual(selected.status, HistoryR0SelectionStatus.SELECTED)
 
+    def test_ignores_subsequent_existing_bot_reply(self):
+        base = history_payload().model_dump(by_alias=True)
+        bot_reply = dict(
+            base["message"][0],
+            id=702,
+            senderid=245339,
+            text="respuesta posterior del bot fixture",
+        )
+        selected = select(
+            history_payload(
+                messages=[base["message"][0], bot_reply],
+                users=[
+                    {"id": 51, "connector": True},
+                    {"id": 245339, "connector": False},
+                ],
+            )
+        )
+
+        self.assertEqual(selected.status, HistoryR0SelectionStatus.SELECTED)
+        self.assertEqual(selected.candidate_count, 1)
+
 
 if __name__ == "__main__":
     unittest.main()

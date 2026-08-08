@@ -82,7 +82,7 @@ class G0EntrypointTests(unittest.IsolatedAsyncioTestCase):
             {
                 "status": "ok",
                 "service": "bitrix_g0_ingress",
-                "version": "v0.117",
+                "version": "v0.266",
                 "effective_mode": "off",
                 "activation_locked": True,
                 "external_calls_enabled": False,

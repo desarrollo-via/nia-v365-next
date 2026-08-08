@@ -21,6 +21,10 @@ from .models import (
 from .runtime import ConnectorRuntimeUnavailable
 from .security import redact_form_data, validate_webhook_identity
 from .service import ConnectorPersistenceError
+from .event_scoped_oauth import EventScopedOAuthOwner
+from .bitrix_history_r0_m82_injected_settings_oauth_owner import (
+    StoredOAuthAccessView,
+)
 
 
 class WebhookRuntime(Protocol):
@@ -36,6 +40,11 @@ WebhookReceiptObserver = Callable[
     Awaitable[None],
 ]
 
+ProtectedWebhookOAuthObserver = Callable[
+    [NormalizedBitrixEvent, WebhookReceipt, ConnectorSettings, StoredOAuthAccessView],
+    Awaitable[None],
+]
+
 
 async def handle_bitrix_webhook(
     request: Request,
@@ -43,6 +52,7 @@ async def handle_bitrix_webhook(
     settings_loader: Callable[[], ConnectorSettings],
     runtime: Optional[WebhookRuntime] = None,
     receipt_observer: Optional[WebhookReceiptObserver] = None,
+    protected_oauth_observer: Optional[ProtectedWebhookOAuthObserver] = None,
 ) -> WebhookReceipt | JSONResponse:
     """Valida el formulario y solo persiste si existe un runtime habilitado."""
 
@@ -134,6 +144,29 @@ async def handle_bitrix_webhook(
             is_system=event.is_system,
         ),
     )
+    if protected_oauth_observer is not None:
+        owner: Optional[EventScopedOAuthOwner] = None
+        try:
+            if (
+                receipt.status != "disabled"
+                or receipt.reason != "connector_locked_off"
+                or not receipt.identity_verified
+                or receipt.persisted
+                or receipt.nia_called
+                or receipt.bitrix_written
+            ):
+                raise RuntimeError("protected_oauth_receipt_not_inert")
+            owner = EventScopedOAuthOwner.take_from_form_once(flat_form)
+
+            async def observe_with_private_token(view: StoredOAuthAccessView) -> None:
+                await protected_oauth_observer(event, receipt, settings, view)
+
+            await owner.run_once(observe_with_private_token)
+        except Exception:
+            pass
+        finally:
+            if owner is not None:
+                owner.close()
     if receipt_observer is not None:
         try:
             await receipt_observer(event, receipt, settings)
@@ -150,6 +183,7 @@ async def handle_bitrix_webhook(
 
 __all__ = [
     "WebhookReceiptObserver",
+    "ProtectedWebhookOAuthObserver",
     "WebhookRuntime",
     "handle_bitrix_webhook",
 ]
