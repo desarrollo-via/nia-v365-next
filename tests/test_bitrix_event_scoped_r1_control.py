@@ -12,6 +12,11 @@ from bitrix_connector.bitrix_event_scoped_r1_gate import (
     EVENT_R1_SECOND_CONFIRMATION,
     EventScopedR1Gate,
 )
+from bitrix_connector.bitrix_event_scoped_r1_pre_event_lease import (
+    PreEventLeaseArmEvidence,
+    PreEventLeaseRollbackEvidence,
+    PreEventParticipantLease,
+)
 from bitrix_connector.bitrix_history_r0_m82_injected_settings_oauth_owner import (
     StoredOAuthAccessView,
 )
@@ -24,6 +29,9 @@ from bitrix_connector.bitrix_history_r0_runner import (
     BitrixHistoryR0Status,
 )
 from bitrix_connector.config import load_settings
+from bitrix_connector.controlled_chat_participant_adapter import (
+    ParticipantSafetyState,
+)
 from bitrix_connector.models import NormalizedBitrixEvent, WebhookReceipt
 from bitrix_connector.review_auth import SingleReviewerAuthenticator
 
@@ -104,6 +112,53 @@ def controlled_settings():
 
 class VerifiedResult:
     state = "VERIFIED"
+
+
+LEASE_FINGERPRINT = "b" * 64
+
+
+class LeaseOperations:
+    def __init__(self, *, restored=True):
+        self.arm_calls = 0
+        self.rollback_calls = 0
+        self.restored = restored
+
+    async def arm(self):
+        self.arm_calls += 1
+        return PreEventLeaseArmEvidence(
+            exact_scope=True,
+            linked_verified=True,
+            bot_nia_absent=True,
+            baseline_fingerprint=LEASE_FINGERPRINT,
+        )
+
+    async def rollback(self, baseline_fingerprint):
+        self.rollback_calls += 1
+        return PreEventLeaseRollbackEvidence(
+            exact_scope=True,
+            restored_verified=self.restored,
+            bot_next_absent=True,
+            bot_nia_absent=True,
+            restored_fingerprint=(
+                baseline_fingerprint or LEASE_FINGERPRINT
+            ),
+        )
+
+
+def lease_factory(operations, clock):
+    return lambda: PreEventParticipantLease(
+        safety=ParticipantSafetyState(
+            effective_mode="off",
+            activation_locked=True,
+            external_calls_enabled=False,
+            runtime_state="inert",
+            r0_mounted=False,
+            r1_active=True,
+        ),
+        arm=operations.arm,
+        rollback=operations.rollback,
+        clock=clock,
+    )
 
 
 def gate_factory(calls=None):
@@ -200,6 +255,134 @@ class EventScopedR1SessionOwnerTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(len(calls), 2)
         self.assertFalse(any(token))
+
+    async def test_injected_lease_arms_after_second_confirmation_and_restores_after_event(self):
+        now = [1000.0]
+        operations = LeaseOperations()
+        owner = EventScopedR1SessionOwner(
+            gate_factory,
+            ttl_seconds=60,
+            clock=lambda: now[0],
+            pre_event_lease_factory=lease_factory(
+                operations, lambda: now[0]
+            ),
+        )
+        await owner.accept_first_confirmation_once(EVENT_R1_FIRST_CONFIRMATION)
+        await owner.confirm_manual_removal_once(confirmed=True)
+
+        armed = await owner.accept_second_confirmation_once(
+            EVENT_R1_SECOND_CONFIRMATION
+        )
+        later = await owner.snapshot()
+
+        self.assertEqual(armed.state, "ATTENTION-REQUIRED")
+        self.assertTrue(armed.pre_event_lease_bound)
+        self.assertEqual(armed.pre_event_lease_state, "AWAITING-EVENT")
+        self.assertEqual(armed.participant_arm_attempts, 1)
+        self.assertEqual(armed.human_message_authorizations, 1)
+        self.assertTrue(armed.human_message_required_now)
+        self.assertFalse(later.human_message_required_now)
+
+        token = bytearray(b"event-token-fixture")
+        view = StoredOAuthAccessView(token)
+        await owner.observe(
+            controlled_event(), inert_receipt(), controlled_settings(), view
+        )
+        final = await owner.snapshot()
+        view.close()
+        token[:] = b"\x00" * len(token)
+
+        self.assertEqual(final.state, "VERIFIED")
+        self.assertEqual(final.pre_event_lease_state, "RESTORED")
+        self.assertEqual(final.participant_rollback_attempts, 1)
+        self.assertTrue(final.participant_rollback_verified)
+        self.assertEqual((operations.arm_calls, operations.rollback_calls), (1, 1))
+
+    async def test_injected_lease_expires_and_rolls_back_with_shared_deadline(self):
+        now = [1000.0]
+        operations = LeaseOperations()
+        owner = EventScopedR1SessionOwner(
+            gate_factory,
+            ttl_seconds=60,
+            clock=lambda: now[0],
+            pre_event_lease_factory=lease_factory(
+                operations, lambda: now[0]
+            ),
+        )
+        await owner.accept_first_confirmation_once(EVENT_R1_FIRST_CONFIRMATION)
+        await owner.confirm_manual_removal_once(confirmed=True)
+        await owner.accept_second_confirmation_once(EVENT_R1_SECOND_CONFIRMATION)
+        now[0] = 1060.0
+
+        expired = await owner.snapshot()
+
+        self.assertEqual(expired.state, "EXPIRED")
+        self.assertEqual(expired.pre_event_lease_state, "EXPIRED-RESTORED")
+        self.assertTrue(expired.participant_rollback_verified)
+        self.assertEqual(operations.rollback_calls, 1)
+
+    async def test_lease_rollback_failure_overrides_verified_gate(self):
+        operations = LeaseOperations(restored=False)
+        owner = EventScopedR1SessionOwner(
+            gate_factory,
+            pre_event_lease_factory=lease_factory(
+                operations, lambda: 1000.0
+            ),
+            clock=lambda: 1000.0,
+        )
+        await owner.accept_first_confirmation_once(EVENT_R1_FIRST_CONFIRMATION)
+        await owner.confirm_manual_removal_once(confirmed=True)
+        await owner.accept_second_confirmation_once(EVENT_R1_SECOND_CONFIRMATION)
+        token = bytearray(b"event-token-fixture")
+        view = StoredOAuthAccessView(token)
+
+        await owner.observe(
+            controlled_event(), inert_receipt(), controlled_settings(), view
+        )
+        final = await owner.snapshot()
+        view.close()
+        token[:] = b"\x00" * len(token)
+
+        self.assertEqual(final.state, "NO-GO")
+        self.assertEqual(final.pre_event_lease_state, "ROLLBACK-FAILED")
+        self.assertFalse(final.participant_rollback_verified)
+        self.assertEqual(final.roundtrip_calls, 1)
+
+    async def test_injected_lease_disarm_rolls_back_and_failure_dominates_gate(self):
+        for restored, expected in ((True, "DISARMED"), (False, "NO-GO")):
+            with self.subTest(restored=restored):
+                operations = LeaseOperations(restored=restored)
+                owner = EventScopedR1SessionOwner(
+                    gate_factory,
+                    pre_event_lease_factory=lease_factory(
+                        operations, lambda: 1000.0
+                    ),
+                    clock=lambda: 1000.0,
+                )
+                await owner.accept_first_confirmation_once(
+                    EVENT_R1_FIRST_CONFIRMATION
+                )
+                await owner.confirm_manual_removal_once(confirmed=True)
+                await owner.accept_second_confirmation_once(
+                    EVENT_R1_SECOND_CONFIRMATION
+                )
+
+                result = await owner.disarm_once()
+
+                self.assertEqual(result.state, expected)
+                self.assertEqual(operations.rollback_calls, 1)
+
+    async def test_default_owner_has_no_pre_event_lease(self):
+        owner = EventScopedR1SessionOwner(gate_factory)
+        await owner.accept_first_confirmation_once(EVENT_R1_FIRST_CONFIRMATION)
+        await owner.confirm_manual_removal_once(confirmed=True)
+        result = await owner.accept_second_confirmation_once(
+            EVENT_R1_SECOND_CONFIRMATION
+        )
+
+        self.assertFalse(result.pre_event_lease_bound)
+        self.assertIsNone(result.pre_event_lease_state)
+        self.assertEqual(result.participant_arm_attempts, 0)
 
 
 class EventScopedR1ControlRouterTests(unittest.TestCase):

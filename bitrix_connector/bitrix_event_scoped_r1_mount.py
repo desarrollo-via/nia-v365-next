@@ -15,6 +15,10 @@ from .bitrix_event_scoped_r1_control import (
     build_event_r1_control_router,
 )
 from .bitrix_event_scoped_r1_gate import EventScopedR1Gate
+from .bitrix_event_scoped_r1_participant_mount import (
+    EventR1ParticipantMountedRoundtrip,
+)
+from .bitrix_event_scoped_r1_pre_event_lease import PreEventParticipantLease
 from .bitrix_history_r0_m86_concrete_lifecycle_operations import (
     M86ConcreteLifecycleOperations,
 )
@@ -35,6 +39,10 @@ class EventScopedR1Mount:
     observer_bound: bool = False
     activation_surface_available: bool = False
     execution_enabled: bool = False
+    participant_roundtrip_bound: bool = False
+    pre_event_lease_factory_bound: bool = False
+    participant_strategy: Literal["none", "posterior", "pre-event"] = "none"
+    participant_mount_count: int = 0
     status: str = "disabled"
     reason: str = "event_r1_disabled"
     external_calls: Literal[0] = 0
@@ -74,6 +82,7 @@ _SAFE_CONFIGURATION_REASONS = frozenset(
         "event_r1_review_auth_missing",
         "event_r1_dependency_missing",
         "event_r1_owner_factory_invalid",
+        "event_r1_participant_strategy_ambiguous",
     }
 )
 
@@ -88,16 +97,23 @@ async def _unreachable_cross_turn(*_args) -> None:
     raise RuntimeError("event_r1_cross_turn_not_available")
 
 
-def _production_gate_factory(settings: ConnectorSettings) -> EventScopedR1Gate:
+def _production_gate_factory(
+    settings: ConnectorSettings,
+    *,
+    posterior_participant_mount: bool = True,
+) -> EventScopedR1Gate:
     operations = M86ConcreteLifecycleOperations(
         nia_base_url=settings.nia_base_url or "",
         http_client_factory=_production_http_client_factory,
         cross_turn_waiter=_unreachable_cross_turn,
         emergency_rollback=True,
     )
+    roundtrip = operations.m88_event
+    if posterior_participant_mount:
+        roundtrip = EventR1ParticipantMountedRoundtrip(roundtrip=roundtrip)
     return EventScopedR1Gate(
         preflight=operations.preflight,
-        roundtrip=operations.m88_event,
+        roundtrip=roundtrip,
         execution_enabled=True,
     )
 
@@ -110,6 +126,9 @@ def build_optional_event_scoped_r1_mount(
         EventScopedR1SessionOwner
     ),
     gate_factory: Optional[Callable[[], EventScopedR1Gate]] = None,
+    pre_event_lease_factory: Optional[
+        Callable[[], PreEventParticipantLease]
+    ] = None,
 ) -> EventScopedR1Mount:
     """Compone una única sesión protegida sin desbloquear el conector."""
 
@@ -146,9 +165,31 @@ def build_optional_event_scoped_r1_mount(
     if not authenticator.configured:
         raise EventR1MountConfigurationError("event_r1_review_auth_missing")
 
-    factory = gate_factory or (lambda: _production_gate_factory(settings))
+    if gate_factory is not None and pre_event_lease_factory is not None:
+        raise EventR1MountConfigurationError(
+            "event_r1_participant_strategy_ambiguous"
+        )
+
+    participant_strategy: Literal["none", "posterior", "pre-event"]
+    if gate_factory is not None:
+        participant_strategy = "none"
+        factory = gate_factory
+    elif pre_event_lease_factory is not None:
+        participant_strategy = "pre-event"
+        factory = lambda: _production_gate_factory(
+            settings, posterior_participant_mount=False
+        )
+    else:
+        participant_strategy = "posterior"
+        factory = lambda: _production_gate_factory(settings)
     try:
-        owner = owner_factory(factory)
+        if pre_event_lease_factory is None:
+            owner = owner_factory(factory)
+        else:
+            owner = owner_factory(
+                factory,
+                pre_event_lease_factory=pre_event_lease_factory,
+            )
     except Exception as exc:
         raise EventR1MountConfigurationError(
             "event_r1_owner_factory_invalid"
@@ -170,6 +211,12 @@ def build_optional_event_scoped_r1_mount(
         observer_bound=True,
         activation_surface_available=True,
         execution_enabled=True,
+        participant_roundtrip_bound=participant_strategy == "posterior",
+        pre_event_lease_factory_bound=participant_strategy == "pre-event",
+        participant_strategy=participant_strategy,
+        participant_mount_count=(
+            0 if participant_strategy == "none" else 1
+        ),
         status="mounted",
         reason="event_r1_mounted",
     )
@@ -184,6 +231,9 @@ def mount_optional_event_scoped_r1_fail_isolated(
         EventScopedR1SessionOwner
     ),
     gate_factory: Optional[Callable[[], EventScopedR1Gate]] = None,
+    pre_event_lease_factory: Optional[
+        Callable[[], PreEventParticipantLease]
+    ] = None,
 ) -> EventScopedR1Mount:
     """Aísla configuración inválida y conserva el webhook inerte."""
 
@@ -193,6 +243,7 @@ def mount_optional_event_scoped_r1_fail_isolated(
             prefix=prefix,
             owner_factory=owner_factory,
             gate_factory=gate_factory,
+            pre_event_lease_factory=pre_event_lease_factory,
         )
     except EventR1MountConfigurationError as exc:
         candidate = str(exc)

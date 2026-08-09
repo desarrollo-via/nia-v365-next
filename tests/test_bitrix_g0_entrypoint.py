@@ -311,6 +311,8 @@ class G0EntrypointConfigurationTests(unittest.TestCase):
         self.assertNotIn("CORSMiddleware", source)
         self.assertNotIn("uvicorn", source)
         self.assertNotIn("app = create_g0_entrypoint", source)
+        self.assertNotIn("pre_event_binding", source)
+        self.assertNotIn("protected_oauth_builder", source)
 
 
 if __name__ == "__main__":
