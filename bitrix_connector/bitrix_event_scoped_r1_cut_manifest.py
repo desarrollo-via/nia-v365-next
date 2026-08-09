@@ -13,20 +13,23 @@ from typing import Iterable, Literal
 
 
 M53_M86_CUT_PHASE: Literal["M86-CH"] = "M86-CH"
-M53_M86_CUT_EXPECTED_COUNT = 286
+M53_M86_CUT_EXPECTED_COUNT = 306
 M53_M86_CUT_EXPECTED_SHA256 = (
-    "62dc7efd5a4e8d12352a67eba39bc3efc0b6a0766b5eca33d48a74d94e8ada1c"
+    "c4df72260a6bf6422e25b48b02e50957d652912643a7d7a476135fd6a8ac27b0"
 )
 
 M53_M86_CUT_PATTERNS = (
     "bitrix_connector/bitrix_history_r0_*.py",
     "bitrix_connector/bitrix_event_scoped_*.py",
     "bitrix_connector/bitrix_webhook_event_roundtrip.py",
+    "bitrix_connector/controlled_chat_participant_adapter.py",
+    "bitrix_connector/controlled_chat_participant_http.py",
     "bitrix_connector/event_scoped_oauth.py",
     "bitrix_connector/bitrix_oauth_refresh_execution_owner.py",
     "bitrix_connector/bitrix_oauth_refresh_rollback_readiness.py",
     "bitrix_connector/__init__.py",
     "bitrix_connector/bot_v2_preflight.py",
+    "bitrix_connector/config.py",
     "bitrix_connector/g0_entrypoint.py",
     "bitrix_connector/openline_pilot_preflight.py",
     "bitrix_connector/router.py",
@@ -34,9 +37,12 @@ M53_M86_CUT_PATTERNS = (
     "tests/test_bitrix_history_r0_*.py",
     "tests/test_bitrix_event_scoped_*.py",
     "tests/test_bitrix_webhook_event_roundtrip.py",
+    "tests/test_bitrix_controlled_chat_participant_adapter.py",
+    "tests/test_bitrix_controlled_chat_participant_http.py",
     "tests/test_bitrix_oauth_refresh_execution_owner.py",
     "tests/test_bitrix_oauth_refresh_rollback_readiness.py",
     "tests/test_bitrix_g0_entrypoint.py",
+    "tests/test_bitrix_connector.py",
     "tests/test_bitrix_openline_pilot_preflight.py",
     "docs/bitrix_event_scoped_r1_deployment_contract.md",
     "docs/bitrix_history_r0_preflight_execution_runbook.md",

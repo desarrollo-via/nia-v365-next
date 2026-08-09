@@ -12,6 +12,10 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field, StrictBool, ValidationError
 
 from .bitrix_event_scoped_r1_gate import EventScopedR1Gate
+from .bitrix_event_scoped_r1_pre_event_lease import (
+    PreEventLeaseSnapshot,
+    PreEventParticipantLease,
+)
 from .bitrix_history_r0_m82_injected_settings_oauth_owner import (
     StoredOAuthAccessView,
 )
@@ -72,6 +76,12 @@ class EventR1ControlSnapshot(BaseModel):
     persisted: Literal[False] = False
     oauth_refresh_calls: Literal[0] = 0
     oauth_persistence_calls: Literal[0] = 0
+    pre_event_lease_bound: bool = False
+    pre_event_lease_state: Optional[str] = None
+    participant_arm_attempts: int = 0
+    participant_rollback_attempts: int = 0
+    participant_rollback_verified: bool = False
+    human_message_authorizations: int = 0
 
 
 class EventScopedR1SessionOwner:
@@ -83,6 +93,9 @@ class EventScopedR1SessionOwner:
         *,
         ttl_seconds: int = EVENT_R1_SESSION_TTL_SECONDS,
         clock: Callable[[], float] = time.monotonic,
+        pre_event_lease_factory: Optional[
+            Callable[[], PreEventParticipantLease]
+        ] = None,
     ) -> None:
         if (
             not callable(gate_factory)
@@ -90,22 +103,30 @@ class EventScopedR1SessionOwner:
             or ttl_seconds < 60
             or ttl_seconds > EVENT_R1_SESSION_TTL_SECONDS
             or not callable(clock)
+            or (
+                pre_event_lease_factory is not None
+                and not callable(pre_event_lease_factory)
+            )
         ):
             raise TypeError("event_r1_owner_dependency_invalid")
         self._gate_factory: Optional[Callable[[], EventScopedR1Gate]] = gate_factory
         self._ttl_seconds = ttl_seconds
         self._clock = clock
+        self._pre_event_lease_factory = pre_event_lease_factory
         self._lock = asyncio.Lock()
         self._gate: Optional[EventScopedR1Gate] = None
         self._deadline: Optional[float] = None
         self._state: EventR1ControlState = "IDLE"
         self._consumed = False
         self._disarm_calls = 0
+        self._pre_event_lease: Optional[PreEventParticipantLease] = None
+        self._lease_snapshot: Optional[PreEventLeaseSnapshot] = None
+        self._human_message_prompt_pending = False
 
     def __repr__(self) -> str:
         return "EventScopedR1SessionOwner(<redacted>)"
 
-    def _expire_locked(self) -> None:
+    async def _expire_locked(self) -> None:
         if (
             self._gate is None
             or self._deadline is None
@@ -113,29 +134,52 @@ class EventScopedR1SessionOwner:
             or self._clock() < self._deadline
         ):
             return
+        if self._pre_event_lease is not None:
+            self._lease_snapshot = await self._pre_event_lease.expire_if_due()
         self._gate.close()
         self._gate = None
         self._deadline = None
-        self._state = "EXPIRED"
+        self._pre_event_lease_factory = None
+        self._state = (
+            "NO-GO"
+            if self._lease_snapshot is not None
+            and self._lease_snapshot.state == "ROLLBACK-FAILED"
+            else "EXPIRED"
+        )
+        self._human_message_prompt_pending = False
 
-    def _no_go_locked(self) -> None:
+    async def _no_go_locked(self) -> None:
         self._consumed = True
         self._gate_factory = None
+        self._pre_event_lease_factory = None
         if self._gate is not None:
             self._gate.close()
+        if self._pre_event_lease is not None:
+            self._lease_snapshot = await self._pre_event_lease.close()
+        self._human_message_prompt_pending = False
         self._state = "NO-GO"
 
     def _snapshot_locked(self) -> EventR1ControlSnapshot:
         gate_snapshot = self._gate.snapshot() if self._gate is not None else None
         state = self._state
-        if gate_snapshot is not None and state not in ("EXPIRED", "DISARMED"):
+        if gate_snapshot is not None and state not in (
+            "EXPIRED",
+            "DISARMED",
+            "NO-GO",
+        ):
             state = gate_snapshot.state
         attention = state == "ATTENTION-REQUIRED"
+        lease = self._lease_snapshot
+        human_message_required = (
+            self._human_message_prompt_pending
+            if lease is not None
+            else attention
+        )
         return EventR1ControlSnapshot(
             state=state,
             consumed=self._consumed,
             attention_required_now=attention,
-            human_message_required_now=attention,
+            human_message_required_now=human_message_required,
             first_confirmation_calls=(
                 gate_snapshot.first_confirmation_calls if gate_snapshot else 0
             ),
@@ -149,21 +193,33 @@ class EventScopedR1SessionOwner:
             preflight_calls=gate_snapshot.preflight_calls if gate_snapshot else 0,
             roundtrip_calls=gate_snapshot.roundtrip_calls if gate_snapshot else 0,
             disarm_calls=self._disarm_calls,
+            pre_event_lease_bound=lease is not None,
+            pre_event_lease_state=lease.state if lease is not None else None,
+            participant_arm_attempts=lease.arm_attempts if lease else 0,
+            participant_rollback_attempts=(
+                lease.rollback_attempts if lease else 0
+            ),
+            participant_rollback_verified=(
+                lease.rollback_verified if lease else False
+            ),
+            human_message_authorizations=(
+                lease.human_message_authorizations if lease else 0
+            ),
         )
 
     async def snapshot(self) -> EventR1ControlSnapshot:
         async with self._lock:
-            self._expire_locked()
+            await self._expire_locked()
             return self._snapshot_locked()
 
     async def accept_first_confirmation_once(
         self, confirmation: str
     ) -> EventR1ControlSnapshot:
         async with self._lock:
-            self._expire_locked()
+            await self._expire_locked()
             factory, self._gate_factory = self._gate_factory, None
             if self._consumed or self._state != "IDLE" or factory is None:
-                self._no_go_locked()
+                await self._no_go_locked()
                 return self._snapshot_locked()
             self._consumed = True
             try:
@@ -175,18 +231,18 @@ class EventScopedR1SessionOwner:
                 result = gate.accept_first_confirmation_once(confirmation)
                 self._state = result.state
             except Exception:
-                self._no_go_locked()
+                await self._no_go_locked()
             return self._snapshot_locked()
 
     async def confirm_manual_removal_once(
         self, *, confirmed: bool
     ) -> EventR1ControlSnapshot:
         async with self._lock:
-            self._expire_locked()
+            await self._expire_locked()
             if self._state == "EXPIRED":
                 return self._snapshot_locked()
             if self._gate is None:
-                self._no_go_locked()
+                await self._no_go_locked()
             else:
                 result = self._gate.confirm_manual_removal_once(
                     confirmed=confirmed
@@ -198,27 +254,67 @@ class EventScopedR1SessionOwner:
         self, confirmation: str
     ) -> EventR1ControlSnapshot:
         async with self._lock:
-            self._expire_locked()
+            await self._expire_locked()
             if self._state == "EXPIRED":
                 return self._snapshot_locked()
             if self._gate is None:
-                self._no_go_locked()
+                await self._no_go_locked()
             else:
                 result = self._gate.accept_second_confirmation_once(confirmation)
                 self._state = result.state
-            return self._snapshot_locked()
+                if self._state == "ATTENTION-REQUIRED":
+                    factory, self._pre_event_lease_factory = (
+                        self._pre_event_lease_factory,
+                        None,
+                    )
+                    if factory is not None:
+                        try:
+                            lease = factory()
+                            if not isinstance(lease, PreEventParticipantLease):
+                                raise TypeError("pre_event_lease_factory_invalid")
+                            if self._deadline is None:
+                                raise RuntimeError("event_r1_deadline_missing")
+                            self._pre_event_lease = lease
+                            self._lease_snapshot = (
+                                await lease.arm_after_second_confirmation_once(
+                                    session_deadline=self._deadline
+                                )
+                            )
+                            if self._lease_snapshot.state != "ARMED":
+                                raise RuntimeError("pre_event_lease_arm_failed")
+                            self._lease_snapshot = (
+                                await lease.consume_human_message_authorization_once()
+                            )
+                            if self._lease_snapshot.state != "AWAITING-EVENT":
+                                raise RuntimeError(
+                                    "pre_event_message_authorization_failed"
+                                )
+                            self._human_message_prompt_pending = True
+                        except Exception:
+                            await self._no_go_locked()
+                elif self._state == "NO-GO":
+                    await self._no_go_locked()
+            snapshot = self._snapshot_locked()
+            self._human_message_prompt_pending = False
+            return snapshot
 
     async def disarm_once(self) -> EventR1ControlSnapshot:
         async with self._lock:
-            self._expire_locked()
+            await self._expire_locked()
             self._disarm_calls += 1
             if self._state == "DISARMED" or self._disarm_calls != 1:
-                self._no_go_locked()
+                await self._no_go_locked()
                 return self._snapshot_locked()
             self._consumed = True
             self._gate_factory = None
+            self._pre_event_lease_factory = None
             if self._gate is not None:
                 self._gate.close()
+            if self._pre_event_lease is not None:
+                self._lease_snapshot = await self._pre_event_lease.disarm_once()
+                if self._lease_snapshot.state == "ROLLBACK-FAILED":
+                    self._state = "NO-GO"
+                    return self._snapshot_locked()
             self._gate = None
             self._deadline = None
             self._state = "DISARMED"
@@ -232,12 +328,28 @@ class EventScopedR1SessionOwner:
         token_view: StoredOAuthAccessView,
     ) -> None:
         async with self._lock:
-            self._expire_locked()
+            await self._expire_locked()
             gate = self._gate
             if gate is None or self._state != "ATTENTION-REQUIRED":
                 return
-            await gate.observe(event, receipt, settings, token_view)
-            self._state = gate.snapshot().state
+            lease_claimed = False
+            if self._pre_event_lease is not None:
+                self._lease_snapshot = (
+                    await self._pre_event_lease.claim_exact_event_once(event)
+                )
+                lease_claimed = self._lease_snapshot.state == "EVENT-CLAIMED"
+                if not lease_claimed:
+                    return
+            try:
+                await gate.observe(event, receipt, settings, token_view)
+                self._state = gate.snapshot().state
+            finally:
+                if lease_claimed and self._pre_event_lease is not None:
+                    self._lease_snapshot = (
+                        await self._pre_event_lease.release_after_event_once()
+                    )
+                    if self._lease_snapshot.state != "RESTORED":
+                        self._state = "NO-GO"
             if self._state in _TERMINAL_GATE_STATES:
                 gate.close()
 

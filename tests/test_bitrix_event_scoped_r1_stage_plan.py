@@ -22,7 +22,7 @@ class EventScopedR1StagePlanTests(unittest.TestCase):
         self.assertEqual(result.state, "PREPARED")
         self.assertEqual(result.argv[:3], ("git", "add", "--"))
         self.assertEqual(result.argv[3:], paths)
-        self.assertEqual(result.path_count, 286)
+        self.assertEqual(result.path_count, 306)
         self.assertTrue(result.literal_paths_only)
         self.assertTrue(result.manifest_verified)
         self.assertTrue(result.index_unchanged)
@@ -46,6 +46,24 @@ class EventScopedR1StagePlanTests(unittest.TestCase):
         self.assertEqual(result.path_count, 0)
         self.assertFalse(result.manifest_verified)
         self.assertEqual(result.git_calls, 0)
+
+    def test_omitting_config_or_its_primary_test_removes_the_command(self):
+        paths = resolve_m53_m86_cut_paths(PROJECT_ROOT)
+
+        for required in (
+            "bitrix_connector/config.py",
+            "tests/test_bitrix_connector.py",
+        ):
+            with self.subTest(required=required):
+                candidate = tuple(path for path in paths if path != required)
+                result = build_m53_m86_stage_plan(
+                    PROJECT_ROOT,
+                    candidate_paths=candidate,
+                )
+                self.assertEqual(result.state, "NO-GO")
+                self.assertEqual(result.argv, ())
+                self.assertEqual(result.path_count, 0)
+                self.assertFalse(result.manifest_verified)
 
     def test_module_has_no_execution_surface(self):
         source = (

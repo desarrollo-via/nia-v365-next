@@ -16,6 +16,14 @@ DEFAULT_MONGO_DB = "nia"
 DEFAULT_EVENTS_COLLECTION = "nia_bitrix_events"
 DEFAULT_INSTALLATIONS_COLLECTION = "nia_bitrix_installations"
 DEFAULT_REVIEW_AUDIT_COLLECTION = "nia_bitrix_review_audit"
+EVENT_R1_PARTICIPANT_STRATEGY_POSTERIOR = "posterior"
+EVENT_R1_PARTICIPANT_STRATEGY_PRE_EVENT = "pre-event"
+EVENT_R1_PARTICIPANT_STRATEGIES = frozenset(
+    {
+        EVENT_R1_PARTICIPANT_STRATEGY_POSTERIOR,
+        EVENT_R1_PARTICIPANT_STRATEGY_PRE_EVENT,
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -44,6 +52,8 @@ class ConnectorSettings:
     r0_bridge_configuration_valid: bool
     event_r1_enabled: bool
     event_r1_configuration_valid: bool
+    event_r1_participant_strategy: str
+    event_r1_participant_strategy_configuration_valid: bool
     pilot_enabled: bool
     pilot_emergency_stop: bool
     pilot_rules: tuple[PilotScopeRule, ...]
@@ -183,6 +193,18 @@ def load_settings(environ: Optional[Mapping[str, str]] = None) -> ConnectorSetti
         env.get("NIA_BITRIX_EVENT_R1_ENABLED"),
         default=False,
     )
+    requested_participant_strategy = (
+        env.get("NIA_BITRIX_EVENT_R1_PARTICIPANT_STRATEGY")
+        or EVENT_R1_PARTICIPANT_STRATEGY_POSTERIOR
+    ).strip().lower()
+    participant_strategy_valid = (
+        requested_participant_strategy in EVENT_R1_PARTICIPANT_STRATEGIES
+    )
+    event_r1_participant_strategy = (
+        requested_participant_strategy
+        if participant_strategy_valid
+        else EVENT_R1_PARTICIPANT_STRATEGY_POSTERIOR
+    )
 
     valid_modes = {mode.value for mode in ConnectorMode}
     if requested not in valid_modes:
@@ -204,6 +226,8 @@ def load_settings(environ: Optional[Mapping[str, str]] = None) -> ConnectorSetti
         warnings.append("invalid_r0_bridge_enabled")
     if not event_r1_enabled_valid:
         warnings.append("invalid_event_r1_enabled")
+    if not participant_strategy_valid:
+        warnings.append("invalid_event_r1_participant_strategy")
 
     return ConnectorSettings(
         requested_mode=requested,
@@ -242,6 +266,10 @@ def load_settings(environ: Optional[Mapping[str, str]] = None) -> ConnectorSetti
         r0_bridge_configuration_valid=r0_bridge_enabled_valid,
         event_r1_enabled=event_r1_enabled,
         event_r1_configuration_valid=event_r1_enabled_valid,
+        event_r1_participant_strategy=event_r1_participant_strategy,
+        event_r1_participant_strategy_configuration_valid=(
+            participant_strategy_valid
+        ),
         pilot_enabled=pilot_enabled,
         pilot_emergency_stop=pilot_emergency_stop,
         pilot_rules=pilot_rules,
