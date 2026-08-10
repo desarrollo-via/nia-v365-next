@@ -5,8 +5,8 @@ from fastapi import APIRouter, Request
 from . import CONNECTOR_VERSION
 from .audit_router import create_audit_router
 from .config import load_settings
-from .bitrix_event_scoped_r1_mount import (
-    mount_optional_event_scoped_r1_fail_isolated,
+from .bitrix_event_scoped_r1_pre_event_binding import (
+    mount_optional_event_scoped_r1_with_pre_event_binding,
 )
 from .installation_router import create_installation_router
 from .installation_status_router import create_installation_status_router
@@ -51,7 +51,7 @@ embedded_r0_bridge_mount = mount_optional_r0_bridge_fail_isolated(
     load_settings(),
     prefix=R0_BRIDGE_EMBEDDED_PREFIX,
 )
-event_scoped_r1_mount = mount_optional_event_scoped_r1_fail_isolated(
+event_scoped_r1_mount = mount_optional_event_scoped_r1_with_pre_event_binding(
     router,
     load_settings(),
 )

@@ -102,12 +102,20 @@ class EventScopedR1MountTests(unittest.TestCase):
         self.assertTrue(mount.observer_bound)
         self.assertTrue(mount.activation_surface_available)
         self.assertTrue(mount.execution_enabled)
+        self.assertFalse(mount.participant_roundtrip_bound)
+        self.assertFalse(mount.pre_event_lease_factory_bound)
+        self.assertEqual(mount.participant_strategy, "none")
+        self.assertEqual(mount.participant_mount_count, 0)
         self.assertIsNotNone(mount.router)
         self.assertIsNotNone(mount.owner)
         self.assertIsNotNone(mount.observer)
 
     def test_production_composition_can_arm_without_calling_external_dependencies(self):
         mount = build_optional_event_scoped_r1_mount(self.enabled_settings())
+        self.assertTrue(mount.participant_roundtrip_bound)
+        self.assertFalse(mount.pre_event_lease_factory_bound)
+        self.assertEqual(mount.participant_strategy, "posterior")
+        self.assertEqual(mount.participant_mount_count, 1)
         app = FastAPI()
         app.include_router(mount.router)
         with TestClient(app) as client:
@@ -129,6 +137,32 @@ class EventScopedR1MountTests(unittest.TestCase):
         self.assertEqual(first.json()["preflight_calls"], 0)
         self.assertEqual(first.json()["roundtrip_calls"], 0)
         self.assertEqual(disarmed.json()["state"], "DISARMED")
+
+    def test_pre_event_strategy_excludes_posterior_wrapper(self):
+        mount = build_optional_event_scoped_r1_mount(
+            self.enabled_settings(),
+            pre_event_lease_factory=lambda: None,
+        )
+
+        self.assertTrue(mount.pre_event_lease_factory_bound)
+        self.assertFalse(mount.participant_roundtrip_bound)
+        self.assertEqual(mount.participant_strategy, "pre-event")
+        self.assertEqual(mount.participant_mount_count, 1)
+
+    def test_ambiguous_participant_strategies_fail_isolated(self):
+        parent = FastAPI()
+        mount = mount_optional_event_scoped_r1_fail_isolated(
+            parent.router,
+            self.enabled_settings(),
+            gate_factory=self.fake_gate,
+            pre_event_lease_factory=lambda: None,
+        )
+
+        self.assertEqual(mount.state, "UNAVAILABLE")
+        self.assertEqual(
+            mount.reason, "event_r1_participant_strategy_ambiguous"
+        )
+        self.assertEqual(mount.participant_mount_count, 0)
 
     def test_integrated_default_router_exposes_no_r1_control_routes(self):
         paths = {route.path for route in connector_router_module.router.routes}

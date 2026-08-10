@@ -120,6 +120,36 @@ class ConnectorConfigTests(unittest.TestCase):
         self.assertIn("invalid_event_r1_enabled", invalid.warnings)
         self.assertFalse(enabled.external_calls_enabled)
 
+    def test_event_r1_participant_strategy_is_strict_and_posterior_by_default(self):
+        default = load_settings({})
+        posterior = load_settings(
+            {"NIA_BITRIX_EVENT_R1_PARTICIPANT_STRATEGY": "posterior"}
+        )
+        pre_event = load_settings(
+            {"NIA_BITRIX_EVENT_R1_PARTICIPANT_STRATEGY": "pre-event"}
+        )
+        invalid = load_settings(
+            {"NIA_BITRIX_EVENT_R1_PARTICIPANT_STRATEGY": "automatic"}
+        )
+
+        self.assertEqual(default.event_r1_participant_strategy, "posterior")
+        self.assertTrue(
+            default.event_r1_participant_strategy_configuration_valid
+        )
+        self.assertEqual(posterior.event_r1_participant_strategy, "posterior")
+        self.assertEqual(pre_event.event_r1_participant_strategy, "pre-event")
+        self.assertTrue(
+            pre_event.event_r1_participant_strategy_configuration_valid
+        )
+        self.assertEqual(invalid.event_r1_participant_strategy, "posterior")
+        self.assertFalse(
+            invalid.event_r1_participant_strategy_configuration_valid
+        )
+        self.assertIn(
+            "invalid_event_r1_participant_strategy", invalid.warnings
+        )
+        self.assertFalse(pre_event.external_calls_enabled)
+
     def test_g0_public_origin_is_only_loaded_and_never_enables_calls(self):
         settings = load_settings(
             {"NIA_BITRIX_G0_PUBLIC_ORIGIN": "  https://nia.example.test  "}

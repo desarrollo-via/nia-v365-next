@@ -22,10 +22,10 @@ class EventScopedR1CutManifestTests(unittest.TestCase):
         self.assertEqual(m53_m86_cut_digest(paths), M53_M86_CUT_EXPECTED_SHA256)
         self.assertEqual(result.state, "FROZEN")
         self.assertTrue(result.dependency_cut_frozen)
-        self.assertEqual(result.resolved_count, 286)
-        self.assertEqual(result.candidate_count, 286)
-        self.assertEqual(result.implementation_count, 144)
-        self.assertEqual(result.test_count, 138)
+        self.assertEqual(result.resolved_count, 308)
+        self.assertEqual(result.candidate_count, 308)
+        self.assertEqual(result.implementation_count, 155)
+        self.assertEqual(result.test_count, 149)
         self.assertEqual(result.documentation_count, 3)
         self.assertEqual(result.script_count, 1)
         self.assertEqual(result.missing_or_extra_count, 0)
@@ -43,6 +43,25 @@ class EventScopedR1CutManifestTests(unittest.TestCase):
         self.assertEqual(result.state, "NO-GO")
         self.assertFalse(result.dependency_cut_frozen)
         self.assertEqual(result.missing_or_extra_count, 2)
+
+    def test_config_and_its_primary_test_are_mandatory(self):
+        paths = resolve_m53_m86_cut_paths(PROJECT_ROOT)
+
+        for required in (
+            "bitrix_connector/config.py",
+            "bitrix_connector/internal_identity_names.py",
+            "tests/test_bitrix_connector.py",
+            "tests/test_bitrix_internal_identity_names.py",
+        ):
+            with self.subTest(required=required):
+                candidate = tuple(path for path in paths if path != required)
+                result = audit_m53_m86_cut(
+                    PROJECT_ROOT,
+                    candidate_paths=candidate,
+                )
+                self.assertEqual(result.state, "NO-GO")
+                self.assertFalse(result.dependency_cut_frozen)
+                self.assertEqual(result.missing_or_extra_count, 1)
 
 
 if __name__ == "__main__":
