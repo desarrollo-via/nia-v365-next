@@ -17,6 +17,10 @@ from .review import (
     OutputReviewDetailResponse,
     OutputReviewListResponse,
 )
+from .r1_key_vault_protected_host_probe import (
+    ProtectedHostProbeReader,
+    SanitizedProtectedHostProbeEvidence,
+)
 from .runtime import ConnectorRuntimeUnavailable
 from .security import validate_review_access
 
@@ -76,6 +80,7 @@ def create_review_router(
     *,
     settings_loader: Callable[[], ConnectorSettings] = load_settings,
     include_decisions: bool = True,
+    host_probe: Optional[ProtectedHostProbeReader] = None,
 ) -> APIRouter:
     router = APIRouter(prefix="/review", tags=["Bitrix Connector Review"])
     decision_router = APIRouter()
@@ -100,6 +105,28 @@ def create_review_router(
             character not in "0123456789abcdef" for character in event_key
         ):
             raise HTTPException(status_code=404, detail="review_event_not_found")
+
+    @router.get(
+        "/r1-key-vault-host-probe",
+        response_model=SanitizedProtectedHostProbeEvidence,
+    )
+    async def get_r1_key_vault_host_probe(
+        _authorized: None = Depends(authorize),
+    ) -> SanitizedProtectedHostProbeEvidence:
+        if host_probe is None:
+            raise HTTPException(status_code=503, detail="host_probe_not_bound")
+        try:
+            return host_probe.collect_once()
+        except RuntimeError as error:
+            if str(error) == "r1_protected_host_probe_already_consumed":
+                raise HTTPException(
+                    status_code=409,
+                    detail="host_probe_already_consumed",
+                ) from error
+            raise HTTPException(
+                status_code=503,
+                detail="host_probe_evidence_unavailable",
+            ) from error
 
     def decision_response(
         result: ReviewDecisionResult,
