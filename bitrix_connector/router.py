@@ -23,6 +23,9 @@ from .review_decision_http import (
     build_review_decision_router,
 )
 from .review_decision_runtime import ReviewDecisionRuntime
+from .r1_key_vault_protected_host_probe_binding import (
+    build_protected_host_probe,
+)
 from .runtime import ConnectorRuntime
 from .review_router import create_review_router
 from .webhook_handler import handle_bitrix_webhook
@@ -31,12 +34,14 @@ from .webhook_handler import handle_bitrix_webhook
 router = APIRouter(prefix="/bitrix-connector", tags=["Bitrix Connector"])
 connector_runtime = ConnectorRuntime()
 review_decision_runtime = ReviewDecisionRuntime()
+protected_host_probe = build_protected_host_probe()
 router.include_router(create_installation_router())
 router.include_router(create_installation_status_router())
 router.include_router(
     create_review_router(
         connector_runtime,
         include_decisions=False,
+        host_probe=protected_host_probe,
     )
 )
 router.include_router(
