@@ -81,6 +81,7 @@ def create_review_router(
     settings_loader: Callable[[], ConnectorSettings] = load_settings,
     include_decisions: bool = True,
     host_probe: Optional[ProtectedHostProbeReader] = None,
+    provisioning_probe: Optional[ProtectedHostProbeReader] = None,
 ) -> APIRouter:
     router = APIRouter(prefix="/review", tags=["Bitrix Connector Review"])
     decision_router = APIRouter()
@@ -126,6 +127,31 @@ def create_review_router(
             raise HTTPException(
                 status_code=503,
                 detail="host_probe_evidence_unavailable",
+            ) from error
+
+    @router.get(
+        "/r1-key-vault-provisioning-preflight",
+        response_model=SanitizedProtectedHostProbeEvidence,
+    )
+    async def get_r1_key_vault_provisioning_preflight(
+        _authorized: None = Depends(authorize),
+    ) -> SanitizedProtectedHostProbeEvidence:
+        if provisioning_probe is None:
+            raise HTTPException(
+                status_code=503,
+                detail="provisioning_probe_not_bound",
+            )
+        try:
+            return provisioning_probe.collect_once()
+        except RuntimeError as error:
+            if str(error) == "r1_protected_host_probe_already_consumed":
+                raise HTTPException(
+                    status_code=409,
+                    detail="provisioning_probe_already_consumed",
+                ) from error
+            raise HTTPException(
+                status_code=503,
+                detail="provisioning_probe_evidence_unavailable",
             ) from error
 
     def decision_response(

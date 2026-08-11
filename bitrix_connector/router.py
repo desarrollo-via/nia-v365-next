@@ -35,6 +35,7 @@ router = APIRouter(prefix="/bitrix-connector", tags=["Bitrix Connector"])
 connector_runtime = ConnectorRuntime()
 review_decision_runtime = ReviewDecisionRuntime()
 protected_host_probe = build_protected_host_probe()
+provisioning_preflight_probe = build_protected_host_probe()
 router.include_router(create_installation_router())
 router.include_router(create_installation_status_router())
 router.include_router(
@@ -42,6 +43,7 @@ router.include_router(
         connector_runtime,
         include_decisions=False,
         host_probe=protected_host_probe,
+        provisioning_probe=provisioning_preflight_probe,
     )
 )
 router.include_router(
