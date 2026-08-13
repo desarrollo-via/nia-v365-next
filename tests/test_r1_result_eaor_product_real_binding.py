@@ -9,8 +9,9 @@ from bitrix_connector.r1_result_eaor_product_launcher import (
     R1ResultEaorProductLauncher,
 )
 from bitrix_connector.r1_result_eaor_product_port import (
-    R1EaorProvisioningOwnerAdapter,
+    R1EaorRecoveryResumeAdapter,
 )
+from bitrix_connector.r1_key_vault_recovery_resume import RecoveryResumeResult
 from bitrix_connector.r1_result_eaor_remote_session_adapter import (
     R1EaorRemoteSessionAdapter,
 )
@@ -64,10 +65,28 @@ class BindingHarness:
             self.calls.append("remote-client-builder")
             return self.remote_client
 
+        async def recovery(**_kwargs):
+            self.calls.append("recovery-v2")
+            return RecoveryResumeResult(
+                state="RECOVERED-DORMANT-VERIFIED",
+                failure_stage="none",
+                failure_category="none",
+                preflight_reads=5,
+                recovery_calls=0,
+                secret_probe_calls=1,
+                protected_source_reads=0,
+                secret_write_calls=0,
+                app_setting_write_calls=1,
+                rollback_calls=0,
+                resources_closed=True,
+                secret_existed=True,
+            )
+
         return R1ProductFactoryRuntime(
             local_state_guard=guard,
             activation_preflight_supplier=preflight,
             remote_session_client_builder=remote_client,
+            provisioning_operation=recovery,
             provisioning_runner=self.provision_runner,
             provisioning_health=self.provision_health,
             provisioning_source_builder=backend,
@@ -140,12 +159,12 @@ class R1ResultEaorProductRealBindingTests(unittest.IsolatedAsyncioTestCase):
         provision = plan.provisioning_factory()
         activation = plan.activation_factory()
         session = plan.session_factory()
-        self.assertIsInstance(provision, R1EaorProvisioningOwnerAdapter)
+        self.assertIsInstance(provision, R1EaorRecoveryResumeAdapter)
         self.assertIsInstance(activation, R1EaorActivationOwnerAdapter)
         self.assertIsInstance(session, R1EaorRemoteSessionAdapter)
         self.assertEqual(
             harness.calls,
-            ["backend-builder", "verifier-builder", "remote-client-builder"],
+            ["verifier-builder", "remote-client-builder"],
         )
         self.assertEqual(harness.provision_runner.calls, [])
         self.assertEqual(harness.backend.fetch_calls, 0)
@@ -177,8 +196,9 @@ class R1ResultEaorProductRealBindingTests(unittest.IsolatedAsyncioTestCase):
         completed = await runner.resume_after_human_once()
         self.assertEqual(completed.state, "VERIFIED-RESTORED")
         self.assertTrue(completed.resources_closed)
-        self.assertEqual(harness.backend.fetch_calls, 1)
-        self.assertEqual(harness.sink.set_calls, 1)
+        self.assertIn("recovery-v2", harness.calls)
+        self.assertEqual(harness.backend.fetch_calls, 0)
+        self.assertEqual(harness.sink.set_calls, 0)
         self.assertEqual([call[0] for call in harness.remote_client.calls], [
             "first", "second", "status", "close"
         ])

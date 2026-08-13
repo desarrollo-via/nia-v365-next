@@ -38,6 +38,12 @@ jobs:
           source antenv/bin/activate
           python -m unittest discover -s tests
 
+      - name: Embed exact deployment identity
+        env:
+          DEPLOY_COMMIT: ${{ github.sha }}
+        run: |
+          DEPLOY_TREE="$(git rev-parse HEAD^{tree})" python -c 'import json,os,pathlib; pathlib.Path("bitrix_connector/_deployment_identity.json").write_text(json.dumps({"commit":os.environ["DEPLOY_COMMIT"],"tree":os.environ["DEPLOY_TREE"]},separators=(",",":"),sort_keys=True)+"\n",encoding="utf-8")'
+
       - name: Upload artifact for deployment jobs
         uses: actions/upload-artifact@v4
         with:

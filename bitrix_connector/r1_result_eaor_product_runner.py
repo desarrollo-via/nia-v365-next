@@ -8,6 +8,7 @@ itself and never sends the human message.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import inspect
 from typing import Callable
 
 from .r1_result_eaor_coordinator import (
@@ -22,6 +23,7 @@ class R1ProductExecutionFactories:
     provisioning_factory: Callable
     activation_factory: Callable
     session_factory: Callable
+    runtime_finalizer: Callable | None = None
 
     def __post_init__(self) -> None:
         if not all(callable(item) for item in (
@@ -30,23 +32,29 @@ class R1ProductExecutionFactories:
             self.session_factory,
         )):
             raise TypeError("r1_product_execution_factory_invalid")
+        if self.runtime_finalizer is not None and not callable(self.runtime_finalizer):
+            raise TypeError("r1_product_execution_finalizer_invalid")
 
 
 class R1ResultEaorProductRunner:
     """Owns the exact pre-human run and one resume-or-close decision."""
 
-    __slots__ = ("_acceptance", "_coordinator", "_started", "_terminal")
+    __slots__ = (
+        "_acceptance", "_coordinator", "_finalizer", "_started", "_terminal"
+    )
 
     def __init__(
         self,
         *,
         coordinator: R1ResultEaorCoordinator,
         acceptance: str,
+        finalizer: Callable | None = None,
     ) -> None:
         if type(coordinator) is not R1ResultEaorCoordinator:
             raise TypeError("r1_product_runner_coordinator_invalid")
         self._coordinator = coordinator
         self._acceptance = acceptance
+        self._finalizer = finalizer
         self._started = False
         self._terminal = False
 
@@ -54,24 +62,43 @@ class R1ResultEaorProductRunner:
         if self._started or self._terminal:
             raise RuntimeError("r1_product_runner_reused")
         self._started = True
-        result = await self._coordinator.run_until_human_once(
-            acceptance=self._acceptance
-        )
+        try:
+            result = await self._coordinator.run_until_human_once(
+                acceptance=self._acceptance
+            )
+        except BaseException:
+            self._terminal = True
+            await self._finalize_once()
+            raise
         if result.state != "ATTENTION-REQUIRED":
             self._terminal = True
+            await self._finalize_once()
         return result
 
     async def resume_after_human_once(self) -> R1ResultEaorSnapshot:
         if not self._started or self._terminal:
             raise RuntimeError("r1_product_runner_not_waiting")
         self._terminal = True
-        return await self._coordinator.resume_after_human_once()
+        try:
+            return await self._coordinator.resume_after_human_once()
+        finally:
+            await self._finalize_once()
 
     async def close_waiting_once(self) -> R1ResultEaorSnapshot:
         if not self._started or self._terminal:
             raise RuntimeError("r1_product_runner_not_waiting")
         self._terminal = True
-        return await self._coordinator.close_waiting_once()
+        try:
+            return await self._coordinator.close_waiting_once()
+        finally:
+            await self._finalize_once()
+
+    async def _finalize_once(self) -> None:
+        finalizer, self._finalizer = self._finalizer, None
+        if finalizer is not None:
+            result = finalizer()
+            if inspect.isawaitable(result):
+                await result
 
     def __repr__(self) -> str:
         return "R1ResultEaorProductRunner(<redacted>)"
@@ -95,6 +122,7 @@ def build_dormant_product_runner(
     return R1ResultEaorProductRunner(
         coordinator=coordinator,
         acceptance=acceptance,
+        finalizer=factories.runtime_finalizer,
     )
 
 

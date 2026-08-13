@@ -36,9 +36,9 @@ def evidence(**changes):
         "planned_invalid_switch_fails_closed": True,
         "planned_paths": PRE_EVENT_BINDING_PLANNED_PATHS,
         "local_trace_paths": PRE_EVENT_BINDING_LOCAL_TRACE_PATHS,
-        "candidate_path_count": 308,
+        "candidate_path_count": 310,
         "candidate_path_digest": (
-            "68957fdf7ff890bc996cb37e49cc75618403e945475e1d83503d43c6f1fbfed9"
+            "859768a580ea90f8e5c5be2b538c2532ef57de9bbc30fcfcf95e47adc1a9bd5b"
         ),
         "focal_tests_passed": True,
         "full_tests_passed": True,
@@ -81,9 +81,9 @@ class PreEventBindingPreflightTests(unittest.TestCase):
         self.assertEqual(PRE_EVENT_BINDING_MAX_WINDOW_SECONDS, 600)
         self.assertEqual(result.maximum_window_seconds, 600)
         self.assertEqual(result.protected_setting_count, len(PROTECTED_SETTING_NAMES))
-        self.assertEqual(result.planned_path_count, 12)
+        self.assertEqual(result.planned_path_count, 16)
         self.assertEqual(result.local_trace_path_count, 1)
-        self.assertEqual(result.candidate_path_count, 308)
+        self.assertEqual(result.candidate_path_count, 310)
         self.assertEqual(PRE_EVENT_BINDING_LOCAL_TRACE_PATHS, ("nia_next.md",))
         self.assertNotIn("nia_next.md", PRE_EVENT_BINDING_PLANNED_PATHS)
         self.assertEqual(

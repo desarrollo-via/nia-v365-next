@@ -341,7 +341,7 @@ def build_managed_identity_exact_secret_backend(
 ) -> AzureKeyVaultExactSecretBackend:
     """Build an inert exact-secret backend owned by Managed Identity.
 
-    SDK construction performs no request. The only Key Vault read remains
+    SDK construction performs no request.  The sole Key Vault read remains
     deferred until ``fetch_exact`` is called by the pre-event lease.
     """
 

@@ -479,6 +479,41 @@ class R1KeyVaultLinuxProvisioningRealBindingTests(
         self.assertIsNone(sink._client)
         self.assertIsNone(sink._credential)
 
+    async def test_sdk_sink_sanitizes_http_status_without_exception_text(self):
+        class Credential:
+            async def close(self):
+                return None
+
+        class PrivateFailure(Exception):
+            status_code = 403
+
+        class Client:
+            def __init__(self, **_kwargs):
+                pass
+
+            async def set_secret(self, _name, _value):
+                raise PrivateFailure("private-value-must-not-propagate")
+
+            async def close(self):
+                return None
+
+        modules = {
+            "azure": types.ModuleType("azure"),
+            "azure.identity": types.ModuleType("azure.identity"),
+            "azure.identity.aio": types.ModuleType("azure.identity.aio"),
+            "azure.keyvault": types.ModuleType("azure.keyvault"),
+            "azure.keyvault.secrets": types.ModuleType("azure.keyvault.secrets"),
+            "azure.keyvault.secrets.aio": types.ModuleType("azure.keyvault.secrets.aio"),
+        }
+        modules["azure.identity.aio"].AzureCliCredential = Credential
+        modules["azure.keyvault.secrets.aio"].SecretClient = Client
+        sink = AzureKeyVaultExactSecretSink()
+        with patch.dict(sys.modules, modules):
+            with self.assertRaisesRegex(RuntimeError, "failed_authorization") as caught:
+                await sink.set_exact_secret_once(bytearray(b"YWJj"))
+            await sink.close()
+        self.assertNotIn("private-value", str(caught.exception))
+
     def test_module_has_no_top_level_execution_or_secret_output(self):
         source = inspect.getsource(
             __import__(

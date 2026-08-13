@@ -79,6 +79,11 @@ VAULT_SHOW = (
     "--name", VAULT_NAME, "--subscription", SUBSCRIPTION_ID,
     "--query", "id", "--output", "tsv",
 )
+VAULT_ACTIVE_ARM_SHOW = (
+    AZURE_CLI, "rest", "--method", "get", "--url",
+    f"https://management.azure.com{VAULT_ID}?api-version=2023-07-01",
+    "--query", "id", "--output", "tsv",
+)
 VAULT_DELETED_SHOW = (
     AZURE_CLI, "rest", "--method", "get", "--url",
     f"https://management.azure.com/subscriptions/{SUBSCRIPTION_ID}/providers/"
@@ -138,6 +143,16 @@ VAULT_DELETE = (
     AZURE_CLI, "keyvault", "delete", "--resource-group", RESOURCE_GROUP,
     "--name", VAULT_NAME, "--subscription", SUBSCRIPTION_ID,
     "--output", "none",
+)
+VAULT_RECOVER = (
+    AZURE_CLI, "keyvault", "recover", "--name", VAULT_NAME,
+    "--location", AZURE_LOCATION, "--subscription", SUBSCRIPTION_ID,
+    "--query", "id", "--output", "tsv",
+)
+VAULT_WAIT_RECOVERED = (
+    AZURE_CLI, "keyvault", "wait", "--name", VAULT_NAME,
+    "--resource-group", RESOURCE_GROUP, "--subscription", SUBSCRIPTION_ID,
+    "--created", "--interval", "5", "--timeout", "120", "--output", "none",
 )
 VAULT_CREATE_ACTIVITY = (
     AZURE_CLI, "monitor", "activity-log", "list",
@@ -203,11 +218,13 @@ def _role_create(
 
 def _is_allowlisted_command(command: tuple[str, ...]) -> bool:
     static = {
-        ACCOUNT_SHOW, WEB_APP_SHOW, VAULT_SHOW, VAULT_DELETED_SHOW,
+        ACCOUNT_SHOW, WEB_APP_SHOW, VAULT_SHOW, VAULT_ACTIVE_ARM_SHOW,
+        VAULT_DELETED_SHOW,
         VAULT_NAME_CHECK,
         OPERATOR_SHOW, VAULT_CREATE, IDENTITY_ENABLE, WRITER_ROLE_DELETE,
         APP_SETTING_SET, APP_SETTING_DELETE, ROLE_DELETE, IDENTITY_DISABLE,
-        VAULT_DELETE, VAULT_CREATE_ACTIVITY, VAULT_CREATE_CAUSE_ACTIVITY,
+        VAULT_DELETE, VAULT_RECOVER, VAULT_WAIT_RECOVERED,
+        VAULT_CREATE_ACTIVITY, VAULT_CREATE_CAUSE_ACTIVITY,
         KEY_VAULT_PROVIDER_SHOW, KEY_VAULT_PROVIDER_REGISTER,
         _role_definition_show(ROLE_DEFINITION_ID),
         _role_definition_show(WRITER_ROLE_DEFINITION_ID),
@@ -305,6 +322,8 @@ class ExactAzureCliCommandRunner:
             timeout = (
                 PROVIDER_REGISTRATION_TIMEOUT_SECONDS
                 if command == KEY_VAULT_PROVIDER_REGISTER
+                else 150
+                if command == VAULT_WAIT_RECOVERED
                 else COMMAND_TIMEOUT_SECONDS
             )
             stdout, _stderr = await asyncio.wait_for(
@@ -621,6 +640,22 @@ class AzureKeyVaultExactSecretSink:
             ):
                 raise RuntimeError("r1_kv_binding_secret_id_invalid")
             return secret_id
+        except Exception as error:
+            status = getattr(error, "status_code", None)
+            name = type(error).__name__.casefold()
+            if status == 401 or "authentication" in name or "credentialunavailable" in name:
+                category = "authentication"
+            elif status == 403 or "forbidden" in name:
+                category = "authorization"
+            elif status == 404 or "notfound" in name:
+                category = "not_found"
+            elif status in {408, 429, 500, 502, 503, 504} or "transport" in name or "timeout" in name:
+                category = "transport"
+            else:
+                category = "unknown"
+            raise RuntimeError(
+                f"r1_kv_binding_secret_write_failed_{category}"
+            ) from None
         finally:
             value = ""
 
@@ -680,6 +715,8 @@ __all__ = [
     "KEY_VAULT_PROVIDER_REGISTER", "KEY_VAULT_PROVIDER_SHOW",
     "PROVIDER_REGISTRATION_TIMEOUT_SECONDS",
     "SanitizedCommandResult", "VAULT_CREATE_ACTIVITY",
-    "VAULT_CREATE_CAUSE_ACTIVITY", "VAULT_DELETED_SHOW",
+    "VAULT_ACTIVE_ARM_SHOW", "VAULT_CREATE_CAUSE_ACTIVITY",
+    "VAULT_DELETED_SHOW", "VAULT_RECOVER",
+    "VAULT_WAIT_RECOVERED",
     "build_dormant_real_provisioning_owner",
 ]

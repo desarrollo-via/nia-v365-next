@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 import time
 from collections.abc import Callable
 
@@ -19,6 +20,10 @@ from .r1_key_vault_linux_provisioning_owner import (
 from .r1_result_eaor_activation_adapter import R1EaorActivationOwnerAdapter
 from .r1_result_eaor_coordinator import R1EaorStageResult, R1ResultEaorCoordinator
 from .r1_result_eaor_remote_session_adapter import R1EaorRemoteSessionAdapter
+from .r1_key_vault_recovery_resume import (
+    RecoveryResumeResult,
+    recover_and_resume_once,
+)
 
 
 class R1EaorProvisioningOwnerAdapter:
@@ -55,6 +60,44 @@ class R1EaorProvisioningOwnerAdapter:
             else "NO-GO-REMAINDER"
         )
         return R1EaorStageResult(state, resources_closed=result.resources_closed)
+
+
+class R1EaorRecoveryResumeAdapter:
+    """EAOR adapter for the resumable v2 Key Vault checkpoint owner."""
+
+    __slots__ = ("_operation", "_kwargs", "_used")
+
+    def __init__(self, *, operation=recover_and_resume_once, **kwargs) -> None:
+        if not callable(operation):
+            raise TypeError("r1_eaor_recovery_operation_invalid")
+        self._operation = operation
+        self._kwargs = dict(kwargs)
+        self._used = False
+
+    async def provision_once(self) -> R1EaorStageResult:
+        operation, self._operation = self._operation, None
+        kwargs, self._kwargs = self._kwargs, {}
+        if self._used or operation is None:
+            self._used = True
+            raise RuntimeError("r1_eaor_recovery_adapter_reused")
+        self._used = True
+        result = await operation(**kwargs)
+        if type(result) is not RecoveryResumeResult:
+            raise TypeError("r1_eaor_recovery_result_invalid")
+        mapping = {
+            "RECOVERED-DORMANT-VERIFIED": "PROVISIONED-DORMANT-VERIFIED",
+            "WAITING-DATA-PLANE-SAFE": "WAITING-DATA-PLANE-SAFE",
+            "WAITING-SECRET-ACCESS-SAFE": "WAITING-SECRET-ACCESS-SAFE",
+            "ATTENTION-REQUIRED-AUTHENTICATION-SAFE": (
+                "ATTENTION-REQUIRED-AUTHENTICATION-SAFE"
+            ),
+            "FAILED-RESTORED": "FAILED-RESTORED",
+            "NO-GO-REMAINDER": "NO-GO-REMAINDER",
+        }
+        return R1EaorStageResult(
+            mapping.get(result.state, "NO-GO-REMAINDER"),
+            resources_closed=result.resources_closed,
+        )
 
 
 class R1EaorSessionOwnerAdapter:
@@ -170,7 +213,7 @@ class R1ResultEaorProductPort:
     def __init__(
         self,
         *,
-        provisioning_factory: Callable[[], R1EaorProvisioningOwnerAdapter],
+        provisioning_factory: Callable[[], object],
         activation_factory: Callable[[], R1EaorActivationOwnerAdapter],
         session_factory: Callable[[], object],
     ) -> None:
@@ -195,7 +238,9 @@ class R1ResultEaorProductPort:
         self._claim("provision")
         factory, self._provisioning_factory = self._provisioning_factory, None
         adapter = factory() if factory is not None else None
-        if type(adapter) is not R1EaorProvisioningOwnerAdapter:
+        if type(adapter) not in {
+            R1EaorProvisioningOwnerAdapter, R1EaorRecoveryResumeAdapter
+        }:
             raise TypeError("r1_eaor_provisioning_adapter_invalid")
         return await adapter.provision_once()
 
@@ -203,6 +248,8 @@ class R1ResultEaorProductPort:
         self._claim("activate")
         factory, self._activation_factory = self._activation_factory, None
         adapter = factory() if factory is not None else None
+        if inspect.isawaitable(adapter):
+            adapter = await adapter
         if type(adapter) is not R1EaorActivationOwnerAdapter:
             raise TypeError("r1_eaor_activation_adapter_invalid")
         self._activation = adapter
@@ -212,6 +259,8 @@ class R1ResultEaorProductPort:
         self._claim("arm")
         factory, self._session_factory = self._session_factory, None
         adapter = factory() if factory is not None else None
+        if inspect.isawaitable(adapter):
+            adapter = await adapter
         if type(adapter) not in {
             R1EaorSessionOwnerAdapter, R1EaorRemoteSessionAdapter
         }:
@@ -283,7 +332,7 @@ class R1ResultEaorProductPort:
 
 def build_dormant_product_eaor_coordinator(
     *,
-    provisioning_factory: Callable[[], R1EaorProvisioningOwnerAdapter],
+    provisioning_factory: Callable[[], object],
     activation_factory: Callable[[], R1EaorActivationOwnerAdapter],
     session_factory: Callable[[], object],
 ) -> R1ResultEaorCoordinator:
@@ -299,6 +348,7 @@ def build_dormant_product_eaor_coordinator(
 
 
 __all__ = [
-    "R1EaorProvisioningOwnerAdapter", "R1EaorSessionOwnerAdapter",
+    "R1EaorProvisioningOwnerAdapter", "R1EaorRecoveryResumeAdapter",
+    "R1EaorSessionOwnerAdapter",
     "R1ResultEaorProductPort", "build_dormant_product_eaor_coordinator",
 ]

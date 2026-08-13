@@ -8,11 +8,10 @@ mutate any external surface.
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
+import inspect
 from typing import Callable, Literal
 
-from .r1_key_vault_linux_provisioning_real_binding import (
-    build_dormant_real_provisioning_owner,
-)
+from .r1_key_vault_recovery_resume import recover_and_resume_once
 from .r1_pre_event_activation_apply_real_binding import (
     ExactActivationAzureCliRunner,
     ExactAnonymousR1ActivationVerifier,
@@ -20,7 +19,7 @@ from .r1_pre_event_activation_apply_real_binding import (
 )
 from .r1_result_eaor_activation_adapter import R1EaorActivationOwnerAdapter
 from .r1_result_eaor_product_port import (
-    R1EaorProvisioningOwnerAdapter,
+    R1EaorRecoveryResumeAdapter,
 )
 from .r1_result_eaor_remote_session_adapter import R1EaorRemoteSessionAdapter
 from .r1_result_eaor_product_runner import R1ProductExecutionFactories
@@ -31,12 +30,14 @@ class R1ProductFactoryRuntime:
     local_state_guard: Callable[[], bool]
     activation_preflight_supplier: Callable
     remote_session_client_builder: Callable
+    provisioning_operation: Callable | None = None
     provisioning_runner: object | None = None
     provisioning_health: object | None = None
     provisioning_source_builder: Callable | None = None
     provisioning_sink: object | None = None
     activation_verifier_builder: Callable = ExactAnonymousR1ActivationVerifier
     activation_runner_factory: Callable = ExactActivationAzureCliRunner
+    runtime_finalizer: Callable | None = None
 
     def __post_init__(self) -> None:
         if not all(callable(item) for item in (
@@ -47,12 +48,20 @@ class R1ProductFactoryRuntime:
             self.activation_runner_factory,
         )):
             raise TypeError("r1_product_factory_runtime_invalid")
+        if self.provisioning_operation is not None and not callable(
+            self.provisioning_operation
+        ):
+            raise TypeError("r1_product_factory_runtime_invalid")
+        if self.runtime_finalizer is not None and not callable(
+            self.runtime_finalizer
+        ):
+            raise TypeError("r1_product_factory_runtime_invalid")
 
 
 @dataclass(frozen=True)
 class R1ProductFactoryBindingDependencies:
-    provisioning_owner_builder: Callable = build_dormant_real_provisioning_owner
-    provisioning_adapter: type = R1EaorProvisioningOwnerAdapter
+    provisioning_operation: Callable = recover_and_resume_once
+    provisioning_adapter: type = R1EaorRecoveryResumeAdapter
     activation_owner_builder: Callable = build_dormant_real_activation_apply_owner
     activation_adapter: type = R1EaorActivationOwnerAdapter
     session_adapter: type = R1EaorRemoteSessionAdapter
@@ -61,8 +70,8 @@ class R1ProductFactoryBindingDependencies:
 def _dependencies_exact(item: object) -> bool:
     return bool(
         type(item) is R1ProductFactoryBindingDependencies
-        and item.provisioning_owner_builder is build_dormant_real_provisioning_owner
-        and item.provisioning_adapter is R1EaorProvisioningOwnerAdapter
+        and item.provisioning_operation is recover_and_resume_once
+        and item.provisioning_adapter is R1EaorRecoveryResumeAdapter
         and item.activation_owner_builder is build_dormant_real_activation_apply_owner
         and item.activation_adapter is R1EaorActivationOwnerAdapter
         and item.session_adapter is R1EaorRemoteSessionAdapter
@@ -128,8 +137,13 @@ class R1ResultEaorProductRealBinding:
                 kwargs["source_builder"] = runtime.provisioning_source_builder
             if runtime.provisioning_sink is not None:
                 kwargs["sink"] = runtime.provisioning_sink
-            owner = dependencies.provisioning_owner_builder(**kwargs)
-            return dependencies.provisioning_adapter(owner=owner)
+            return dependencies.provisioning_adapter(
+                operation=(
+                    runtime.provisioning_operation
+                    or dependencies.provisioning_operation
+                ),
+                **kwargs,
+            )
 
         def activate():
             verifier = runtime.activation_verifier_builder()
@@ -144,12 +158,17 @@ class R1ResultEaorProductRealBinding:
 
         def session():
             client = runtime.remote_session_client_builder()
+            if inspect.isawaitable(client):
+                async def build_async():
+                    return dependencies.session_adapter(client=await client)
+                return build_async()
             return dependencies.session_adapter(client=client)
 
         return R1ProductExecutionFactories(
             provisioning_factory=provision,
             activation_factory=activate,
             session_factory=session,
+            runtime_finalizer=runtime.runtime_finalizer,
         )
 
     def __repr__(self) -> str:

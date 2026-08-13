@@ -22,7 +22,7 @@ class EventScopedR1StagePlanTests(unittest.TestCase):
         self.assertEqual(result.state, "PREPARED")
         self.assertEqual(result.argv[:3], ("git", "add", "--"))
         self.assertEqual(result.argv[3:], paths)
-        self.assertEqual(result.path_count, 308)
+        self.assertEqual(result.path_count, 310)
         self.assertTrue(result.literal_paths_only)
         self.assertTrue(result.manifest_verified)
         self.assertTrue(result.index_unchanged)

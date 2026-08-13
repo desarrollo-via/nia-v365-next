@@ -22,15 +22,19 @@ PRE_EVENT_BINDING_PLANNED_PATHS = (
     "bitrix_connector/bitrix_event_scoped_r1_cut_manifest.py",
     "bitrix_connector/bitrix_event_scoped_r1_pre_event_binding.py",
     "bitrix_connector/bitrix_event_scoped_r1_pre_event_binding_preflight.py",
+    "bitrix_connector/bitrix_event_scoped_r1_key_vault_oauth_builder.py",
     "bitrix_connector/bitrix_event_scoped_r1_stage_plan.py",
     "bitrix_connector/config.py",
+    "bitrix_connector/r1_key_vault_exact_secret_backend.py",
     "bitrix_connector/router.py",
     "tests/test_bitrix_connector.py",
     "tests/test_bitrix_event_scoped_r1_cut_manifest.py",
     "tests/test_bitrix_event_scoped_r1_pre_event_binding.py",
     "tests/test_bitrix_event_scoped_r1_pre_event_binding_preflight.py",
+    "tests/test_bitrix_event_scoped_r1_key_vault_oauth_builder.py",
     "tests/test_bitrix_event_scoped_r1_stage_plan.py",
     "tests/test_bitrix_g0_entrypoint.py",
+    "tests/test_r1_key_vault_exact_secret_backend.py",
 )
 PRE_EVENT_BINDING_LOCAL_TRACE_PATHS = ("nia_next.md",)
 PRE_EVENT_BINDING_ROLLBACK = (
@@ -82,9 +86,9 @@ class PreEventBindingPreflight:
         PRE_EVENT_BINDING_MAX_WINDOW_SECONDS
     )
     protected_setting_count: Literal[7] = len(PROTECTED_SETTING_NAMES)
-    planned_path_count: Literal[12] = len(PRE_EVENT_BINDING_PLANNED_PATHS)
+    planned_path_count: Literal[16] = len(PRE_EVENT_BINDING_PLANNED_PATHS)
     local_trace_path_count: Literal[1] = len(PRE_EVENT_BINDING_LOCAL_TRACE_PATHS)
-    candidate_path_count: Literal[308] = M53_M86_CUT_EXPECTED_COUNT
+    candidate_path_count: Literal[310] = M53_M86_CUT_EXPECTED_COUNT
     critical_binding_authorized: Literal[False] = False
     private_reads: Literal[0] = 0
     mongo_calls: Literal[0] = 0

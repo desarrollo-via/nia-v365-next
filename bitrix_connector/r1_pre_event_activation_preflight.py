@@ -6,8 +6,8 @@ from dataclasses import dataclass
 from typing import Literal, Optional
 
 
-DEPLOYED_MERGE_SHA = "41ab2d5435cadf22db60574166d7eb29dd1dd57e"
-DEPLOYED_TREE_SHA = "370a5b4e5b2b55420e0c918fa8dfc12c6bd42b30"
+DEPLOYED_MERGE_SHA = "374074e52a6fb0a2f8bb004e43afacd2152df069"
+DEPLOYED_TREE_SHA = "01df0d249ab36674b15c3b427260bf17e0a09da4"
 PROTECTED_TARGET_ID = "nia-next/bitrix-r1/protected-settings/v1"
 PROTECTED_SOURCE_KIND = "azure-key-vault-exact-secret"
 PROTECTED_SETTING_COUNT = 7
@@ -100,13 +100,16 @@ def _switch_rollback(
 
 def audit_r1_activation_preflight(
     evidence: R1ActivationPreflightEvidence,
+    *,
+    expected_deployed_sha: str = DEPLOYED_MERGE_SHA,
+    expected_deployed_tree: str = DEPLOYED_TREE_SHA,
 ) -> R1ActivationPreflight:
     if type(evidence) is not R1ActivationPreflightEvidence:
         return R1ActivationPreflight()
 
     deployment = bool(
-        evidence.deployed_sha == DEPLOYED_MERGE_SHA
-        and evidence.deployed_tree == DEPLOYED_TREE_SHA
+        evidence.deployed_sha == expected_deployed_sha
+        and evidence.deployed_tree == expected_deployed_tree
         and evidence.workflow_success
         and evidence.dormant_health_verified
         and evidence.full_tests_passed
