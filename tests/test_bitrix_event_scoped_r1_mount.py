@@ -133,7 +133,7 @@ class EventScopedR1MountTests(unittest.TestCase):
                 },
             )
         self.assertEqual(first.status_code, 200)
-        self.assertEqual(first.json()["state"], "AWAITING-MANUAL-REMOVAL")
+        self.assertEqual(first.json()["state"], "AWAITING-SECOND-CONFIRMATION")
         self.assertEqual(first.json()["preflight_calls"], 0)
         self.assertEqual(first.json()["roundtrip_calls"], 0)
         self.assertEqual(disarmed.json()["state"], "DISARMED")

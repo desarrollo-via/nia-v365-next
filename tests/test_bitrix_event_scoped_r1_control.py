@@ -205,7 +205,7 @@ class EventScopedR1SessionOwnerTests(unittest.IsolatedAsyncioTestCase):
         first = await owner.accept_first_confirmation_once(
             EVENT_R1_FIRST_CONFIRMATION
         )
-        self.assertEqual(first.state, "AWAITING-MANUAL-REMOVAL")
+        self.assertEqual(first.state, "AWAITING-SECOND-CONFIRMATION")
         now[0] += 61
         expired = await owner.snapshot()
         self.assertEqual(expired.state, "EXPIRED")
@@ -218,7 +218,6 @@ class EventScopedR1SessionOwnerTests(unittest.IsolatedAsyncioTestCase):
     async def test_disarm_is_terminal_and_drops_attention(self):
         owner = EventScopedR1SessionOwner(gate_factory)
         await owner.accept_first_confirmation_once(EVENT_R1_FIRST_CONFIRMATION)
-        await owner.confirm_manual_removal_once(confirmed=True)
         armed = await owner.accept_second_confirmation_once(
             EVENT_R1_SECOND_CONFIRMATION
         )
@@ -234,7 +233,6 @@ class EventScopedR1SessionOwnerTests(unittest.IsolatedAsyncioTestCase):
         calls = []
         owner = EventScopedR1SessionOwner(lambda: gate_factory(calls))
         await owner.accept_first_confirmation_once(EVENT_R1_FIRST_CONFIRMATION)
-        await owner.confirm_manual_removal_once(confirmed=True)
         await owner.accept_second_confirmation_once(EVENT_R1_SECOND_CONFIRMATION)
         token = bytearray(b"event-token-fixture")
         view = StoredOAuthAccessView(token)
@@ -268,7 +266,6 @@ class EventScopedR1SessionOwnerTests(unittest.IsolatedAsyncioTestCase):
             ),
         )
         await owner.accept_first_confirmation_once(EVENT_R1_FIRST_CONFIRMATION)
-        await owner.confirm_manual_removal_once(confirmed=True)
 
         armed = await owner.accept_second_confirmation_once(
             EVENT_R1_SECOND_CONFIRMATION
@@ -310,7 +307,6 @@ class EventScopedR1SessionOwnerTests(unittest.IsolatedAsyncioTestCase):
             ),
         )
         await owner.accept_first_confirmation_once(EVENT_R1_FIRST_CONFIRMATION)
-        await owner.confirm_manual_removal_once(confirmed=True)
         await owner.accept_second_confirmation_once(EVENT_R1_SECOND_CONFIRMATION)
         now[0] = 1060.0
 
@@ -331,7 +327,6 @@ class EventScopedR1SessionOwnerTests(unittest.IsolatedAsyncioTestCase):
             clock=lambda: 1000.0,
         )
         await owner.accept_first_confirmation_once(EVENT_R1_FIRST_CONFIRMATION)
-        await owner.confirm_manual_removal_once(confirmed=True)
         await owner.accept_second_confirmation_once(EVENT_R1_SECOND_CONFIRMATION)
         token = bytearray(b"event-token-fixture")
         view = StoredOAuthAccessView(token)
@@ -362,7 +357,6 @@ class EventScopedR1SessionOwnerTests(unittest.IsolatedAsyncioTestCase):
                 await owner.accept_first_confirmation_once(
                     EVENT_R1_FIRST_CONFIRMATION
                 )
-                await owner.confirm_manual_removal_once(confirmed=True)
                 await owner.accept_second_confirmation_once(
                     EVENT_R1_SECOND_CONFIRMATION
                 )
@@ -375,7 +369,6 @@ class EventScopedR1SessionOwnerTests(unittest.IsolatedAsyncioTestCase):
     async def test_default_owner_has_no_pre_event_lease(self):
         owner = EventScopedR1SessionOwner(gate_factory)
         await owner.accept_first_confirmation_once(EVENT_R1_FIRST_CONFIRMATION)
-        await owner.confirm_manual_removal_once(confirmed=True)
         result = await owner.accept_second_confirmation_once(
             EVENT_R1_SECOND_CONFIRMATION
         )
@@ -403,7 +396,7 @@ class EventScopedR1ControlRouterTests(unittest.TestCase):
             )
         self.assertEqual(unauthorized.status_code, 401)
         self.assertEqual(first.status_code, 200)
-        self.assertEqual(first.json()["state"], "AWAITING-MANUAL-REMOVAL")
+        self.assertEqual(first.json()["state"], "AWAITING-SECOND-CONFIRMATION")
         self.assertNotIn(EVENT_R1_FIRST_CONFIRMATION, first.text)
         self.assertEqual(first.headers["cache-control"], "no-store")
 
@@ -414,11 +407,6 @@ class EventScopedR1ControlRouterTests(unittest.TestCase):
                 "/internal/r1-event/first-confirmation",
                 headers=AUTHORIZATION,
                 json={"confirmation": EVENT_R1_FIRST_CONFIRMATION},
-            )
-            manual = client.post(
-                "/internal/r1-event/manual-removal",
-                headers=AUTHORIZATION,
-                json={"confirmed": True},
             )
             second = client.post(
                 "/internal/r1-event/second-confirmation",
@@ -431,8 +419,8 @@ class EventScopedR1ControlRouterTests(unittest.TestCase):
                 json={"confirmation": "sp"},
             )
         self.assertEqual(
-            (first.status_code, manual.status_code, second.status_code),
-            (200, 200, 200),
+            (first.status_code, second.status_code),
+            (200, 200),
         )
         self.assertTrue(second.json()["attention_required_now"])
         self.assertTrue(second.json()["connector_locked_off"])
