@@ -113,10 +113,6 @@ class EventScopedR1GateTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(
             gate.accept_first_confirmation_once(EVENT_R1_FIRST_CONFIRMATION).state,
-            "AWAITING-MANUAL-REMOVAL",
-        )
-        self.assertEqual(
-            gate.confirm_manual_removal_once(confirmed=True).state,
             "AWAITING-SECOND-CONFIRMATION",
         )
         armed = gate.accept_second_confirmation_once(EVENT_R1_SECOND_CONFIRMATION)

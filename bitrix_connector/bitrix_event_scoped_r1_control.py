@@ -9,7 +9,7 @@ from typing import Literal, Optional
 
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, ConfigDict, Field, StrictBool, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from .bitrix_event_scoped_r1_gate import EventScopedR1Gate
 from .bitrix_event_scoped_r1_pre_event_lease import (
@@ -33,7 +33,6 @@ _TERMINAL_GATE_STATES = frozenset({"VERIFIED", "ROLLED-BACK", "NO-GO"})
 
 EventR1ControlState = Literal[
     "IDLE",
-    "AWAITING-MANUAL-REMOVAL",
     "AWAITING-SECOND-CONFIRMATION",
     "ATTENTION-REQUIRED",
     "VERIFIED",
@@ -50,12 +49,6 @@ class EventR1ConfirmationRequest(BaseModel):
     confirmation: str = Field(min_length=1, max_length=160)
 
 
-class EventR1ManualRemovalRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    confirmed: StrictBool
-
-
 class EventR1ControlSnapshot(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
@@ -65,7 +58,6 @@ class EventR1ControlSnapshot(BaseModel):
     attention_required_now: bool = False
     human_message_required_now: bool = False
     first_confirmation_calls: int = 0
-    manual_removal_calls: int = 0
     second_confirmation_calls: int = 0
     event_calls: int = 0
     preflight_calls: int = 0
@@ -183,9 +175,6 @@ class EventScopedR1SessionOwner:
             first_confirmation_calls=(
                 gate_snapshot.first_confirmation_calls if gate_snapshot else 0
             ),
-            manual_removal_calls=(
-                gate_snapshot.manual_removal_calls if gate_snapshot else 0
-            ),
             second_confirmation_calls=(
                 gate_snapshot.second_confirmation_calls if gate_snapshot else 0
             ),
@@ -232,22 +221,6 @@ class EventScopedR1SessionOwner:
                 self._state = result.state
             except Exception:
                 await self._no_go_locked()
-            return self._snapshot_locked()
-
-    async def confirm_manual_removal_once(
-        self, *, confirmed: bool
-    ) -> EventR1ControlSnapshot:
-        async with self._lock:
-            await self._expire_locked()
-            if self._state == "EXPIRED":
-                return self._snapshot_locked()
-            if self._gate is None:
-                await self._no_go_locked()
-            else:
-                result = self._gate.confirm_manual_removal_once(
-                    confirmed=confirmed
-                )
-                self._state = result.state
             return self._snapshot_locked()
 
     async def accept_second_confirmation_once(
@@ -419,22 +392,6 @@ def build_event_r1_control_router(
             )
         result = await owner.accept_first_confirmation_once(body.confirmation)
         body = None
-        return response(result, transition_status(result, "AWAITING-MANUAL-REMOVAL"))
-
-    @router.post("/manual-removal")
-    async def manual_removal(request: Request) -> JSONResponse:
-        rejected = authenticate(request)
-        if rejected is not None:
-            return rejected
-        body = await payload(request, EventR1ManualRemovalRequest)
-        if body is None:
-            return JSONResponse(
-                status_code=422,
-                content={"code": "event_r1_payload_invalid"},
-                headers={"Cache-Control": "no-store"},
-            )
-        result = await owner.confirm_manual_removal_once(confirmed=body.confirmed)
-        body = None
         return response(result, transition_status(result, "AWAITING-SECOND-CONFIRMATION"))
 
     @router.post("/second-confirmation")
@@ -469,7 +426,6 @@ __all__ = [
     "EVENT_R1_SESSION_TTL_SECONDS",
     "EventR1ConfirmationRequest",
     "EventR1ControlSnapshot",
-    "EventR1ManualRemovalRequest",
     "EventScopedR1SessionOwner",
     "build_event_r1_control_router",
 ]

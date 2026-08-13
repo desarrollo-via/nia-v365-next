@@ -46,7 +46,6 @@ class EventScopedR1GateSnapshot:
     phase: Literal["M86-CE"] = "M86-CE"
     state: Literal[
         "DORMANT",
-        "AWAITING-MANUAL-REMOVAL",
         "AWAITING-SECOND-CONFIRMATION",
         "ATTENTION-REQUIRED",
         "VERIFIED",
@@ -54,7 +53,6 @@ class EventScopedR1GateSnapshot:
         "NO-GO",
     ] = "DORMANT"
     first_confirmation_calls: int = 0
-    manual_removal_calls: int = 0
     second_confirmation_calls: int = 0
     event_calls: int = 0
     preflight_calls: int = 0
@@ -92,7 +90,6 @@ class EventScopedR1Gate:
         self._execution_enabled = execution_enabled
         self._state = "DORMANT"
         self._first_calls = 0
-        self._manual_calls = 0
         self._second_calls = 0
         self._event_calls = 0
         self._preflight_calls = 0
@@ -105,14 +102,6 @@ class EventScopedR1Gate:
             or not self._execution_enabled
             or text != EVENT_R1_FIRST_CONFIRMATION
         ):
-            self._state = "NO-GO"
-        else:
-            self._state = "AWAITING-MANUAL-REMOVAL"
-        return self.snapshot()
-
-    def confirm_manual_removal_once(self, *, confirmed: bool) -> EventScopedR1GateSnapshot:
-        self._manual_calls += 1
-        if self._state != "AWAITING-MANUAL-REMOVAL" or confirmed is not True:
             self._state = "NO-GO"
         else:
             self._state = "AWAITING-SECOND-CONFIRMATION"
@@ -184,7 +173,6 @@ class EventScopedR1Gate:
         return EventScopedR1GateSnapshot(
             state=self._state,
             first_confirmation_calls=self._first_calls,
-            manual_removal_calls=self._manual_calls,
             second_confirmation_calls=self._second_calls,
             event_calls=self._event_calls,
             preflight_calls=self._preflight_calls,
