@@ -9,9 +9,9 @@ from typing import Optional, Protocol
 
 
 DOUBLE_AUTHORIZATION = "EXECUTE R1 HOST PROBE WITH INJECTED DOUBLES ONLY"
-EXPECTED_PAYLOAD_BYTES = 2315
+EXPECTED_PAYLOAD_BYTES = 2314
 EXPECTED_PAYLOAD_SHA256 = (
-    "069FCD51B81F34CA8C08A9EFC4B55D908BC34A7B2A9E2A2EEA726670BA486972"
+    "B4699666E8E0AD4397DE37F54BACA2D32D72A46655E9DF4E11C2FC68F8504F95"
 )
 EXPECTED_PACKAGES = {
     "azure-identity": "1.25.3",
@@ -131,10 +131,14 @@ class FixtureOnlyHostProbeTransportOwner:
         tunnel: FixtureTunnel,
         process: FixtureProbeProcess,
     ) -> None:
+        canonical_payload = (
+            payload.replace(b"\r\n", b"\n") if type(payload) is bytes else payload
+        )
         if (
-            type(payload) is not bytes
-            or len(payload) != EXPECTED_PAYLOAD_BYTES
-            or hashlib.sha256(payload).hexdigest().upper()
+            type(canonical_payload) is not bytes
+            or b"\r" in canonical_payload
+            or len(canonical_payload) != EXPECTED_PAYLOAD_BYTES
+            or hashlib.sha256(canonical_payload).hexdigest().upper()
             != EXPECTED_PAYLOAD_SHA256
         ):
             raise ValueError("r1_host_probe_payload_identity_invalid")
@@ -142,7 +146,7 @@ class FixtureOnlyHostProbeTransportOwner:
             raise TypeError("r1_host_probe_tunnel_not_fixture_double")
         if getattr(process, "kind", None) != "fixture-double":
             raise TypeError("r1_host_probe_process_not_fixture_double")
-        self._payload = payload
+        self._payload = canonical_payload
         self._tunnel: Optional[FixtureTunnel] = tunnel
         self._process: Optional[FixtureProbeProcess] = process
         self._used = False
