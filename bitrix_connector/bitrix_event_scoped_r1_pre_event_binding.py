@@ -12,8 +12,8 @@ from .bitrix_event_scoped_r1_mount import (
     mount_optional_event_scoped_r1_fail_isolated,
 )
 from .bitrix_event_scoped_r1_pre_event_lease import PreEventParticipantLease
-from .bitrix_event_scoped_r1_protected_oauth_builder import (
-    build_dormant_real_pre_event_lease_factory,
+from .r1_key_vault_pre_event_oauth_builder import (
+    build_dormant_key_vault_pre_event_lease_factory,
 )
 from .config import (
     EVENT_R1_PARTICIPANT_STRATEGY_POSTERIOR,
@@ -62,7 +62,7 @@ def mount_optional_event_scoped_r1_with_pre_event_binding(
     prefix: str = EVENT_R1_CONTROL_PREFIX,
     lease_factory_builder: Callable[..., Callable[
         [], PreEventParticipantLease
-    ]] = build_dormant_real_pre_event_lease_factory,
+    ]] = build_dormant_key_vault_pre_event_lease_factory,
 ) -> EventScopedR1Mount:
     """Selecciona estrategia sin abrir Credential Manager, Mongo, OAuth o HTTP."""
 
@@ -91,7 +91,8 @@ def mount_optional_event_scoped_r1_with_pre_event_binding(
             )
         try:
             pre_event_factory = lease_factory_builder(
-                safety=_participant_safety(settings)
+                safety=_participant_safety(settings),
+                vault_url=settings.key_vault_url,
             )
         except Exception:
             return _unavailable(

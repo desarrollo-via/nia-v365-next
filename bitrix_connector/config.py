@@ -46,6 +46,7 @@ class ConnectorSettings:
     installations_collection: str
     bitrix_client_id: Optional[str]
     bitrix_client_secret: Optional[str]
+    key_vault_url: Optional[str]
     installation_enabled: bool
     installation_configuration_valid: bool
     r0_bridge_enabled: bool
@@ -260,6 +261,7 @@ def load_settings(environ: Optional[Mapping[str, str]] = None) -> ConnectorSetti
         or DEFAULT_INSTALLATIONS_COLLECTION,
         bitrix_client_id=_clean_optional(env.get("NIA_BITRIX_CLIENT_ID")),
         bitrix_client_secret=_clean_optional(env.get("NIA_BITRIX_CLIENT_SECRET")),
+        key_vault_url=_clean_optional(env.get("NIA_BITRIX_KEY_VAULT_URL")),
         installation_enabled=installation_enabled,
         installation_configuration_valid=installation_enabled_valid,
         r0_bridge_enabled=r0_bridge_enabled,
