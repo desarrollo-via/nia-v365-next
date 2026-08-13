@@ -105,7 +105,7 @@ class R1HostProbeTransportTests(unittest.TestCase):
         )
         self.assertEqual(process.runs[0]["host"], "127.0.0.1")
         self.assertEqual(process.runs[0]["argv"], ("python", "-"))
-        self.assertEqual(process.runs[0]["stdin"], PAYLOAD)
+        self.assertEqual(process.runs[0]["stdin"], PAYLOAD.replace(b"\r\n", b"\n"))
         self.assertEqual(process.runs[0]["timeout_seconds"], 15)
         self.assertEqual((process.closes, tunnel.closes), (1, 1))
 

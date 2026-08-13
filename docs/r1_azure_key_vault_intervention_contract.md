@@ -109,8 +109,8 @@ runtime. Tampoco se enumeraron App Settings: el baseline exacto de
 `NIA_BITRIX_KEY_VAULT_URL` sigue pendiente. Resultado:
 `ARTIFACT-VERIFIED-RUNTIME-SETTING-EXTERNAL-BLOCKED`.
 
-Una sonda host-side saneada quedó preparada localmente con 7/7 pruebas, 2315
-bytes y SHA-256 `069FCD51B81F34CA8C08A9EFC4B55D908BC34A7B2A9E2A2EEA726670BA486972`.
+Una sonda host-side saneada quedó preparada localmente con 7/7 pruebas, 2314
+bytes LF canónicos y SHA-256 `B4699666E8E0AD4397DE37F54BACA2D32D72A46655E9DF4E11C2FC68F8504F95`.
 Su lifecycle fixture-only aprobó 10/10 adicionales. La ruta protegida, owner y
 binding productivo perezoso quedaron ligados sólo localmente a `os.environ` e
 `importlib.metadata.version`; el corte focal aprobó 71/71. La construcción no

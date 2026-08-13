@@ -15,8 +15,8 @@ activar R1, consultar Bitrix o enviar mensajes.
 - Web App: `nia-v365-next-api`; slot `Production`; Linux/Python 3.12.
 - Despliegue: `main@d5b2325a7025fb00b9d5dde0f20e45ab8217f43b`.
 - Payload local: `scripts/r1_key_vault_host_probe_payload.py`.
-- Payload: 2315 bytes; SHA-256
-  `069FCD51B81F34CA8C08A9EFC4B55D908BC34A7B2A9E2A2EEA726670BA486972`.
+- Payload LF canónico: 2314 bytes; SHA-256
+  `B4699666E8E0AD4397DE37F54BACA2D32D72A46655E9DF4E11C2FC68F8504F95`.
 
 ## Lecturas exactas y salida saneada
 
