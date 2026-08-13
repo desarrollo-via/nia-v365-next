@@ -12,7 +12,7 @@ from .bitrix_event_scoped_r1_mount import (
     mount_optional_event_scoped_r1_fail_isolated,
 )
 from .bitrix_event_scoped_r1_pre_event_lease import PreEventParticipantLease
-from .r1_key_vault_pre_event_oauth_builder import (
+from .bitrix_event_scoped_r1_key_vault_oauth_builder import (
     build_dormant_key_vault_pre_event_lease_factory,
 )
 from .config import (

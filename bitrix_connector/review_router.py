@@ -21,6 +21,7 @@ from .r1_key_vault_protected_host_probe import (
     ProtectedHostProbeReader,
     SanitizedProtectedHostProbeEvidence,
 )
+from .r1_pre_event_activation_preflight import R1ActivationPreflightEvidence
 from .runtime import ConnectorRuntimeUnavailable
 from .security import validate_review_access
 
@@ -43,7 +44,6 @@ class ReviewReader(Protocol):
         event_key: str,
         request: ReviewDecisionRequest,
     ) -> ReviewDecisionResult: ...
-
     async def reject_input(
         self,
         event_key: str,
@@ -75,6 +75,10 @@ class ReviewReader(Protocol):
     ) -> ReviewDecisionResult: ...
 
 
+class R1ActivationPreflightReader(Protocol):
+    async def collect_once(self) -> R1ActivationPreflightEvidence: ...
+
+
 def create_review_router(
     reader: ReviewReader,
     *,
@@ -82,6 +86,7 @@ def create_review_router(
     include_decisions: bool = True,
     host_probe: Optional[ProtectedHostProbeReader] = None,
     provisioning_probe: Optional[ProtectedHostProbeReader] = None,
+    activation_preflight: Optional[R1ActivationPreflightReader] = None,
 ) -> APIRouter:
     router = APIRouter(prefix="/review", tags=["Bitrix Connector Review"])
     decision_router = APIRouter()
@@ -152,6 +157,28 @@ def create_review_router(
             raise HTTPException(
                 status_code=503,
                 detail="provisioning_probe_evidence_unavailable",
+            ) from error
+
+    @router.get(
+        "/r1-activation-preflight",
+        response_model=R1ActivationPreflightEvidence,
+    )
+    async def get_r1_activation_preflight(
+        _authorized: None = Depends(authorize),
+    ) -> R1ActivationPreflightEvidence:
+        if activation_preflight is None:
+            raise HTTPException(
+                status_code=503, detail="r1_activation_preflight_not_bound"
+            )
+        try:
+            return await activation_preflight.collect_once()
+        except RuntimeError as error:
+            if str(error) == "r1_activation_host_preflight_reused":
+                raise HTTPException(
+                    status_code=409, detail="r1_activation_preflight_consumed"
+                ) from error
+            raise HTTPException(
+                status_code=503, detail="r1_activation_preflight_unavailable"
             ) from error
 
     def decision_response(

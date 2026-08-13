@@ -24,9 +24,7 @@ from .bitrix_event_scoped_r1_protected_oauth_builder import (
     build_dormant_real_pre_event_lease_factory,
 )
 from .r1_key_vault_linux_provisioning_owner import MANIFEST_SHA256
-from .r1_key_vault_linux_provisioning_real_binding import (
-    build_dormant_real_provisioning_owner,
-)
+from .r1_key_vault_recovery_resume import recover_and_resume_once
 from .r1_pre_event_activation_apply_owner import (
     FIRST_ACTIVATION_CONFIRMATION,
     SECOND_ACTIVATION_CONFIRMATION,
@@ -49,7 +47,7 @@ from .r1_result_eaor_coordinator import EAOR_ID
 from .r1_result_eaor_coordinator import EAOR_ACCEPTANCE
 from .r1_result_eaor_product_port import (
     R1EaorActivationOwnerAdapter,
-    R1EaorProvisioningOwnerAdapter,
+    R1EaorRecoveryResumeAdapter,
     R1EaorSessionOwnerAdapter,
     build_dormant_product_eaor_coordinator,
 )
@@ -73,8 +71,8 @@ OBSERVATION_TIMEOUT_SECONDS = 600
 @dataclass(frozen=True)
 class R1ProductLauncherBindings:
     settings_loader: Callable = load_settings
-    provisioning_owner_builder: Callable = build_dormant_real_provisioning_owner
-    provisioning_adapter: type = R1EaorProvisioningOwnerAdapter
+    provisioning_operation: Callable = recover_and_resume_once
+    provisioning_adapter: type = R1EaorRecoveryResumeAdapter
     activation_owner_builder: Callable = build_dormant_real_activation_apply_owner
     activation_preflight_binding: type = R1ActivationDormantRealBinding
     activation_verifier: type = ExactAnonymousR1ActivationVerifier
@@ -115,9 +113,8 @@ def _bindings_exact(bindings: object) -> bool:
     return bool(
         type(bindings) is R1ProductLauncherBindings
         and bindings.settings_loader is load_settings
-        and bindings.provisioning_owner_builder
-        is build_dormant_real_provisioning_owner
-        and bindings.provisioning_adapter is R1EaorProvisioningOwnerAdapter
+        and bindings.provisioning_operation is recover_and_resume_once
+        and bindings.provisioning_adapter is R1EaorRecoveryResumeAdapter
         and bindings.activation_owner_builder
         is build_dormant_real_activation_apply_owner
         and bindings.activation_preflight_binding is R1ActivationDormantRealBinding
@@ -159,7 +156,7 @@ class R1ResultEaorProductLauncher:
             )
         bindings_ok = _bindings_exact(self._bindings)
         scope_ok = bool(
-            EAOR_ID == "NIA-NEXT-R1-EAOR-2026-08-13-V1"
+            EAOR_ID == "NIA-NEXT-R1-EAOR-INTEGRAL-2026-08-13-V2"
             and MANIFEST_SHA256
             == "16EDAC107B1B8041952D8ED324C0542ECAADDB0AA7EC316C2B557F135864AA49"
             and PROTECTED_TARGET_ID == "nia-next/bitrix-r1/protected-settings/v1"

@@ -1,0 +1,190 @@
+import unittest
+import json
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from unittest.mock import patch
+
+from bitrix_connector.bitrix_history_r0_m81_injected_windows_credential_source import (
+    InjectedWindowsCredentialRecord,
+)
+from bitrix_connector.bitrix_history_r0_protected_helper import PROTECTED_SETTING_NAMES
+from bitrix_connector.controlled_chat_participant_adapter import ChatParticipantSnapshot
+from bitrix_connector.controlled_chat_participant_http import (
+    ParticipantHttpDecision,
+    ParticipantReadResult,
+)
+from bitrix_connector.r1_activation_host_preflight import (
+    ExactR1ActivationHostPreflight,
+    read_packaged_deployment_identity,
+)
+from bitrix_connector.r1_pre_event_activation_preflight import (
+    DEPLOYED_MERGE_SHA, DEPLOYED_TREE_SHA, PROTECTED_TARGET_ID,
+    audit_r1_activation_preflight,
+)
+
+
+PROTECTED_VALUES = {
+    "NIA_BITRIX_DOMAIN": "viaindustrial.bitrix24.es",
+    "NIA_BITRIX_MEMBER_ID": "member-fixture",
+    "NIA_BITRIX_CLIENT_ID": "client-fixture",
+    "NIA_BITRIX_CLIENT_SECRET": "secret-fixture",
+    "NIA_BITRIX_MONGO_URI": "mongodb://fixture.invalid/nia",
+    "NIA_BITRIX_MONGO_DB": "nia",
+    "NIA_BITRIX_INSTALLATIONS_COLLECTION": "installations",
+}
+
+
+class Backend:
+    def __init__(self):
+        self.fetches = 0
+        self.closed = False
+
+    async def fetch_exact(self, target_id):
+        self.fetches += 1
+        return InjectedWindowsCredentialRecord(
+            target_id=target_id,
+            buffers={
+                name: bytearray(PROTECTED_VALUES[name].encode())
+                for name in PROTECTED_SETTING_NAMES
+            },
+        )
+
+    async def close(self):
+        self.closed = True
+
+
+class Provider:
+    def __init__(self): self.calls = 0
+    async def get_access_token(self, member_id):
+        self.calls += 1
+        return "oauth-token-fixture"
+
+
+class OAuthResources:
+    def __init__(self):
+        self.oauth_provider = Provider()
+        self.portal_url = "https://viaindustrial.bitrix24.es"
+        self.member_id = "member-fixture"
+        self.closed = False
+
+    async def close(self): self.closed = True
+
+
+class OAuthFactory:
+    def __init__(self, resources): self.resources = resources; self.calls = 0
+    async def build(self, settings, *, timeout_seconds):
+        self.calls += 1
+        return self.resources
+
+
+class Reader:
+    async def read(self):
+        return ParticipantReadResult(
+            decision=ParticipantHttpDecision.SUCCESS,
+            snapshot=ChatParticipantSnapshot(
+                crm_entity_id=614949,
+                chat_id=78733,
+                dialog_id="chat78733",
+                participant_ids=frozenset({99}),
+            ),
+            http_status=200,
+            pages=1,
+        )
+
+
+class ParticipantResources:
+    def __init__(self): self.reader = Reader(); self.closed = False
+    async def close(self): self.closed = True
+
+
+class R1ActivationHostPreflightTests(unittest.IsolatedAsyncioTestCase):
+    async def test_packaged_identity_is_exact_and_rejects_drift(self):
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "identity.json"
+            path.write_text(json.dumps({
+                "commit": "a" * 40, "tree": "b" * 40
+            }), encoding="utf-8")
+            with patch(
+                "bitrix_connector.r1_activation_host_preflight.DEPLOYMENT_IDENTITY_PATH",
+                path,
+            ):
+                self.assertEqual(
+                    read_packaged_deployment_identity(), ("a" * 40, "b" * 40)
+                )
+                path.write_text(json.dumps({"commit": "a" * 40}), encoding="utf-8")
+                with self.assertRaisesRegex(RuntimeError, "identity_invalid"):
+                    read_packaged_deployment_identity()
+
+    async def test_collects_exact_ready_evidence_and_closes_every_resource(self):
+        environ = {
+            "NIA_BITRIX_REVIEW_TOKEN": "review-token-fixture-123456789",
+            "NIA_BITRIX_KEY_VAULT_URL": "https://fixture.vault.azure.net",
+            "NIA_BITRIX_R0_BRIDGE_ENABLED": "false",
+            "NIA_BITRIX_EVENT_R1_ENABLED": "false",
+            "NIA_BITRIX_EVENT_R1_PARTICIPANT_STRATEGY": "posterior",
+        }
+        backend = Backend()
+        oauth = OAuthResources()
+        oauth_factory = OAuthFactory(oauth)
+        participant = ParticipantResources()
+        probe = ExactR1ActivationHostPreflight(
+            environ=environ,
+            backend_builder=lambda **_kwargs: backend,
+            oauth_factory_builder=lambda: oauth_factory,
+            http_resources_factory=lambda **_kwargs: participant,
+            deployment_identity_supplier=lambda: (
+                DEPLOYED_MERGE_SHA, DEPLOYED_TREE_SHA
+            ),
+        )
+        evidence = await probe.collect_once()
+        result = audit_r1_activation_preflight(evidence)
+        self.assertEqual(result.state, "READY-FIRST-CONFIRMATION")
+        self.assertTrue(result.protected_source_verified)
+        self.assertTrue(result.participant_baseline_verified)
+        self.assertEqual(backend.fetches, 1)
+        self.assertEqual(oauth.oauth_provider.calls, 1)
+        self.assertTrue(backend.closed)
+        self.assertTrue(oauth.closed)
+        self.assertTrue(participant.closed)
+        self.assertEqual(repr(probe), "ExactR1ActivationHostPreflight(<redacted>)")
+        with self.assertRaisesRegex(RuntimeError, "reused"):
+            await probe.collect_once()
+
+    async def test_bot_next_present_fails_closed_without_mutation(self):
+        class PresentReader:
+            async def read(self):
+                return ParticipantReadResult(
+                    decision=ParticipantHttpDecision.SUCCESS,
+                    snapshot=ChatParticipantSnapshot(
+                        crm_entity_id=614949, chat_id=78733,
+                        dialog_id="chat78733", participant_ids=frozenset({373259}),
+                    ),
+                    http_status=200, pages=1,
+                )
+
+        participant = ParticipantResources()
+        participant.reader = PresentReader()
+        oauth = OAuthResources()
+        probe = ExactR1ActivationHostPreflight(
+            environ={
+                "NIA_BITRIX_REVIEW_TOKEN": "review-token-fixture-123456789",
+                "NIA_BITRIX_KEY_VAULT_URL": "https://fixture.vault.azure.net",
+                "NIA_BITRIX_R0_BRIDGE_ENABLED": "false",
+                "NIA_BITRIX_EVENT_R1_ENABLED": "false",
+                "NIA_BITRIX_EVENT_R1_PARTICIPANT_STRATEGY": "posterior",
+            },
+            backend_builder=lambda **_kwargs: Backend(),
+            oauth_factory_builder=lambda: OAuthFactory(oauth),
+            http_resources_factory=lambda **_kwargs: participant,
+            deployment_identity_supplier=lambda: (
+                DEPLOYED_MERGE_SHA, DEPLOYED_TREE_SHA
+            ),
+        )
+        evidence = await probe.collect_once()
+        self.assertEqual(audit_r1_activation_preflight(evidence).state, "NO-GO")
+        self.assertTrue(oauth.closed)
+        self.assertTrue(participant.closed)
+
+
+if __name__ == "__main__":
+    unittest.main()

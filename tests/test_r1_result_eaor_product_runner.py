@@ -1,4 +1,5 @@
 import unittest
+from dataclasses import replace
 
 from bitrix_connector.bitrix_event_scoped_r1_control import EventScopedR1SessionOwner
 from bitrix_connector.bitrix_history_r0_m82_injected_settings_oauth_owner import (
@@ -218,6 +219,49 @@ class R1ResultEaorProductRunnerTests(unittest.IsolatedAsyncioTestCase):
         await runner.close_waiting_once()
         with self.assertRaisesRegex(RuntimeError, "not_waiting"):
             await runner.resume_after_human_once()
+
+    async def test_runtime_finalizer_runs_once_after_waiting_close(self):
+        harness = ProductHarness()
+        calls = []
+
+        async def finalize():
+            calls.append("finalize")
+
+        factories = replace(harness.factories(), runtime_finalizer=finalize)
+        runner = R1ResultEaorProductLauncher(
+            current_day="2026-08-13"
+        ).build_runner_once(
+            acceptance=EAOR_ACCEPTANCE,
+            factories=factories,
+        )
+        await runner.run_until_human_once()
+        await runner.close_waiting_once()
+        self.assertEqual(calls, ["finalize"])
+
+    async def test_runtime_finalizer_runs_when_a_factory_raises(self):
+        calls = []
+
+        def fail():
+            raise RuntimeError("fixture-failure")
+
+        async def finalize():
+            calls.append("finalize")
+
+        factories = R1ProductExecutionFactories(
+            provisioning_factory=fail,
+            activation_factory=lambda: None,
+            session_factory=lambda: None,
+            runtime_finalizer=finalize,
+        )
+        runner = R1ResultEaorProductLauncher(
+            current_day="2026-08-13"
+        ).build_runner_once(
+            acceptance=EAOR_ACCEPTANCE,
+            factories=factories,
+        )
+        result = await runner.run_until_human_once()
+        self.assertEqual(result.state, "NO-GO-REMAINDER")
+        self.assertEqual(calls, ["finalize"])
 
 
 if __name__ == "__main__":

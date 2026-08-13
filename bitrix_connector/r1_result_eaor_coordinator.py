@@ -6,8 +6,10 @@ from dataclasses import dataclass
 from typing import Literal, Protocol
 
 
-EAOR_ID = "NIA-NEXT-R1-EAOR-2026-08-13-V1"
-EAOR_ACCEPTANCE = "sp"
+EAOR_ID = "NIA-NEXT-R1-EAOR-INTEGRAL-2026-08-13-V2"
+EAOR_ACCEPTANCE = (
+    "7D178AF95FCA3AC6EDA534CAFEAB136B7935316661A117CA2ADC2476985FA66B"
+)
 
 StageState = Literal[
     "PROVISIONED-DORMANT-VERIFIED",
@@ -17,6 +19,9 @@ StageState = Literal[
     "FAILED-RESTORED",
     "EXPIRED-RESTORED",
     "NO-GO-REMAINDER",
+    "WAITING-DATA-PLANE-SAFE",
+    "WAITING-SECRET-ACCESS-SAFE",
+    "ATTENTION-REQUIRED-AUTHENTICATION-SAFE",
 ]
 EaorState = Literal[
     "INERT",
@@ -25,6 +30,9 @@ EaorState = Literal[
     "NO-GO-REMAINDER",
     "ATTENTION-REQUIRED",
     "VERIFIED-RESTORED",
+    "WAITING-DATA-PLANE-SAFE",
+    "WAITING-SECRET-ACCESS-SAFE",
+    "ATTENTION-REQUIRED-AUTHENTICATION-SAFE",
 ]
 
 
@@ -47,7 +55,9 @@ class R1EaorPort(Protocol):
 @dataclass(frozen=True)
 class R1ResultEaorSnapshot:
     state: EaorState = "INERT"
-    eaor_id: Literal["NIA-NEXT-R1-EAOR-2026-08-13-V1"] = EAOR_ID
+    eaor_id: Literal[
+        "NIA-NEXT-R1-EAOR-INTEGRAL-2026-08-13-V2"
+    ] = EAOR_ID
     acceptance_calls: int = 0
     provisioning_calls: int = 0
     activation_calls: int = 0
@@ -159,11 +169,12 @@ class R1ResultEaorCoordinator:
                     restored = await self._restore_activation()
                     self._state = "FAILED-RESTORED" if restored else "NO-GO-REMAINDER"
                 else:
-                    self._state = (
-                        "FAILED-RESTORED"
-                        if result.state == "FAILED-RESTORED"
-                        else "NO-GO-REMAINDER"
-                    )
+                    self._state = result.state if result.state in {
+                        "WAITING-DATA-PLANE-SAFE",
+                        "WAITING-SECRET-ACCESS-SAFE",
+                        "ATTENTION-REQUIRED-AUTHENTICATION-SAFE",
+                        "FAILED-RESTORED",
+                    } else "NO-GO-REMAINDER"
                 return self._snapshot(closed=await self._close_once())
         self._waiting = True
         self._state = "ATTENTION-REQUIRED"

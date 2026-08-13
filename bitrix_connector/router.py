@@ -26,6 +26,7 @@ from .review_decision_runtime import ReviewDecisionRuntime
 from .r1_key_vault_protected_host_probe_binding import (
     build_protected_host_probe,
 )
+from .r1_activation_host_preflight import build_r1_activation_host_preflight
 from .runtime import ConnectorRuntime
 from .review_router import create_review_router
 from .webhook_handler import handle_bitrix_webhook
@@ -36,6 +37,7 @@ connector_runtime = ConnectorRuntime()
 review_decision_runtime = ReviewDecisionRuntime()
 protected_host_probe = build_protected_host_probe()
 provisioning_preflight_probe = build_protected_host_probe()
+activation_preflight_probe = build_r1_activation_host_preflight()
 router.include_router(create_installation_router())
 router.include_router(create_installation_status_router())
 router.include_router(
@@ -44,6 +46,7 @@ router.include_router(
         include_decisions=False,
         host_probe=protected_host_probe,
         provisioning_probe=provisioning_preflight_probe,
+        activation_preflight=activation_preflight_probe,
     )
 )
 router.include_router(
