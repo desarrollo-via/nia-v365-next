@@ -21,6 +21,7 @@ def enabled_settings(**overrides):
         "NIA_BITRIX_REVIEW_TOKEN": "review-token-fixture-1234567890",
         "NIA_BITRIX_REVIEW_ACTOR": "reviewer",
         "NIA_BITRIX_REVIEW_CREDENTIAL_ID": "credential-fixture",
+        "NIA_BITRIX_KEY_VAULT_URL": "https://nia-next-r1-kv-260810.vault.azure.net",
     }
     values.update(overrides)
     return load_settings(values)
@@ -32,8 +33,8 @@ class LeaseFactoryBuilder:
         self.result = result if result is not None else (lambda: None)
         self.calls = []
 
-    def __call__(self, *, safety):
-        self.calls.append(safety)
+    def __call__(self, *, safety, vault_url):
+        self.calls.append((safety, vault_url))
         if self.error is not None:
             raise self.error
         return self.result
@@ -75,7 +76,11 @@ class PreEventBindingTests(unittest.TestCase):
         self.assertTrue(mount.pre_event_lease_factory_bound)
         self.assertFalse(mount.participant_roundtrip_bound)
         self.assertEqual(len(builder.calls), 1)
-        safety = builder.calls[0]
+        safety, vault_url = builder.calls[0]
+        self.assertEqual(
+            vault_url,
+            "https://nia-next-r1-kv-260810.vault.azure.net",
+        )
         self.assertEqual(safety.effective_mode, "off")
         self.assertTrue(safety.activation_locked)
         self.assertFalse(safety.external_calls_enabled)

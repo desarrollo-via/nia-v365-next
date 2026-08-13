@@ -336,6 +336,30 @@ def build_dormant_real_key_vault_binding(
     )
 
 
+def build_managed_identity_exact_secret_backend(
+    *, vault_url: str
+) -> AzureKeyVaultExactSecretBackend:
+    """Build an inert exact-secret backend owned by Managed Identity.
+
+    SDK construction performs no request. The only Key Vault read remains
+    deferred until ``fetch_exact`` is called by the pre-event lease.
+    """
+
+    if type(vault_url) is not str or not vault_url.startswith("https://"):
+        raise ValueError("r1_key_vault_managed_identity_url_invalid")
+    from azure.identity.aio import ManagedIdentityCredential
+    from azure.keyvault.secrets.aio import SecretClient
+
+    credential = ManagedIdentityCredential()
+    client = SecretClient(vault_url=vault_url, credential=credential)
+    return AzureKeyVaultExactSecretBackend(
+        client=AzureSDKExactSecretBytesClient(
+            client=client,
+            credential=credential,
+        )
+    )
+
+
 __all__ = [
     "AzureKeyVaultDormantBinding",
     "AzureKeyVaultDormantBindingPreview",
@@ -348,4 +372,5 @@ __all__ = [
     "MAX_KEY_VAULT_DECODED_BLOB_BYTES",
     "MAX_KEY_VAULT_ENCODED_SECRET_BYTES",
     "build_dormant_real_key_vault_binding",
+    "build_managed_identity_exact_secret_backend",
 ]
