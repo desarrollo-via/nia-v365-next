@@ -229,7 +229,7 @@ class R1ResultEaorProductLauncher:
         self._used = True
         if acceptance != EAOR_ACCEPTANCE:
             raise RuntimeError("r1_product_launcher_acceptance_invalid")
-        if self._current_day != "2026-08-13":
+        if self._current_day not in EAOR_CURRENT_DAYS:
             raise RuntimeError("r1_product_launcher_contract_expired")
         if not _bindings_exact(self._bindings):
             raise RuntimeError("r1_product_launcher_binding_drift")
