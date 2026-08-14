@@ -124,17 +124,25 @@ class ExactR1ActivationHostPreflight:
             raise RuntimeError("r1_activation_host_preflight_reused")
         self._attempts += 1
         stage = "baseline"
+        category = "material_drift"
         oauth_resources = None
         participant_resources = None
         try:
             public_settings = self._settings_loader(self._environ)
-            if (
-                not public_settings.review_token
-                or not public_settings.key_vault_url
-                or public_settings.r0_bridge_enabled
-                or public_settings.event_r1_enabled
-                or public_settings.event_r1_participant_strategy != "posterior"
-            ):
+            if not public_settings.review_token:
+                category = "baseline_review_token_missing"
+                raise RuntimeError("r1_activation_host_baseline_invalid")
+            if not public_settings.key_vault_url:
+                category = "baseline_key_vault_url_missing"
+                raise RuntimeError("r1_activation_host_baseline_invalid")
+            if public_settings.r0_bridge_enabled:
+                category = "baseline_r0_bridge_enabled"
+                raise RuntimeError("r1_activation_host_baseline_invalid")
+            if public_settings.event_r1_enabled:
+                category = "baseline_event_r1_enabled"
+                raise RuntimeError("r1_activation_host_baseline_invalid")
+            if public_settings.event_r1_participant_strategy != "posterior":
+                category = "baseline_participant_strategy_drift"
                 raise RuntimeError("r1_activation_host_baseline_invalid")
 
             stage = "switches"
@@ -237,7 +245,7 @@ class ExactR1ActivationHostPreflight:
                 "protected_source": "protected_source_unavailable",
                 "oauth": "oauth_unavailable",
                 "participants": "participants_unavailable",
-            }.get(stage, "material_drift")
+            }.get(stage, category)
             if not retryable or self._attempts >= self._max_attempts:
                 self._used = True
             raise R1ActivationHostPreflightFailure(

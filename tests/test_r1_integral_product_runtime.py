@@ -169,6 +169,32 @@ class R1IntegralProductRuntimeTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(Source.instances[-1].reads, 1)
         await runtime.close()
 
+    async def test_shared_runtime_preserves_nonsecret_baseline_category(self):
+        def handler(request):
+            return httpx.Response(503, request=request, json={"detail": {
+                "state": "NO-GO", "stage": "baseline",
+                "category": "baseline_key_vault_url_missing",
+                "retryable": False, "attempts": 1,
+            }})
+
+        http = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+        runtime = ExactR1SharedReviewRuntime(
+            dotenv_path=Path("fixture.env"), source_builder=Source,
+            client_factory=lambda **_kwargs: http,
+            session_builder=SessionClient,
+            initial_delay_seconds=0, retry_delay_seconds=0,
+            expected_deployed_sha=DEPLOYED_MERGE_SHA,
+            expected_deployed_tree=DEPLOYED_TREE_SHA,
+        )
+        with self.assertRaises(R1SharedReviewPreflightFailure) as raised:
+            await runtime.activation_preflight_supplier()
+        self.assertEqual(raised.exception.stage, "baseline")
+        self.assertEqual(
+            raised.exception.category, "baseline_key_vault_url_missing"
+        )
+        self.assertFalse(raised.exception.retryable)
+        await runtime.close()
+
     async def test_checkpoint_shortcut_performs_health_only_and_zero_writes(self):
         class CheckpointSink:
             def __init__(self): self.closed = False

@@ -342,6 +342,11 @@ class ExactR1SharedReviewRuntime:
                         and category in {
                             "material_drift", "protected_source_unavailable",
                             "oauth_unavailable", "participants_unavailable",
+                            "baseline_review_token_missing",
+                            "baseline_key_vault_url_missing",
+                            "baseline_r0_bridge_enabled",
+                            "baseline_event_r1_enabled",
+                            "baseline_participant_strategy_drift",
                         }
                     ):
                         raise ValueError("r1_shared_review_failure_shape_invalid")
