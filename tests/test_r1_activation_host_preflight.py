@@ -229,6 +229,46 @@ class R1ActivationHostPreflightTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(oauth.closed)
         self.assertTrue(participant.closed)
 
+    async def test_baseline_failures_preserve_exact_nonsecret_category(self):
+        baseline = {
+            "NIA_BITRIX_REVIEW_TOKEN": "review-token-fixture-123456789",
+            "NIA_BITRIX_KEY_VAULT_URL": "https://fixture.vault.azure.net",
+            "NIA_BITRIX_R0_BRIDGE_ENABLED": "false",
+            "NIA_BITRIX_EVENT_R1_ENABLED": "false",
+            "NIA_BITRIX_EVENT_R1_PARTICIPANT_STRATEGY": "posterior",
+        }
+        cases = (
+            ("NIA_BITRIX_REVIEW_TOKEN", None, "baseline_review_token_missing"),
+            ("NIA_BITRIX_KEY_VAULT_URL", None, "baseline_key_vault_url_missing"),
+            ("NIA_BITRIX_R0_BRIDGE_ENABLED", "true", "baseline_r0_bridge_enabled"),
+            ("NIA_BITRIX_EVENT_R1_ENABLED", "true", "baseline_event_r1_enabled"),
+            (
+                "NIA_BITRIX_EVENT_R1_PARTICIPANT_STRATEGY", "pre-event",
+                "baseline_participant_strategy_drift",
+            ),
+        )
+        for name, value, expected in cases:
+            with self.subTest(category=expected):
+                environ = dict(baseline)
+                if value is None:
+                    environ.pop(name)
+                else:
+                    environ[name] = value
+                probe = ExactR1ActivationHostPreflight(
+                    environ=environ,
+                    backend_builder=lambda **_kwargs: None,
+                    oauth_factory_builder=lambda: None,
+                    http_resources_factory=lambda **_kwargs: None,
+                    deployment_identity_supplier=lambda: (
+                        DEPLOYED_MERGE_SHA, DEPLOYED_TREE_SHA
+                    ),
+                )
+                with self.assertRaises(R1ActivationHostPreflightFailure) as raised:
+                    await probe.collect_once()
+                self.assertEqual(raised.exception.stage, "baseline")
+                self.assertEqual(raised.exception.category, expected)
+                self.assertFalse(raised.exception.retryable)
+
 
 if __name__ == "__main__":
     unittest.main()
