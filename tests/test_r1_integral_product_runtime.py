@@ -12,7 +12,9 @@ from bitrix_connector.r1_integral_product_runtime import (
     ACTIVATION_PREFLIGHT_ENDPOINT,
     ExactR1SharedReviewRuntime,
     PersistentOneShotBearerSecretSink,
+    R1SharedReviewPreflightFailure,
     build_integral_product_factory_binding,
+    resume_integral_checkpoint_once,
     resume_preverified_absence_once,
 )
 from bitrix_connector.bitrix_event_scoped_r1_control import EventR1ControlSnapshot
@@ -120,6 +122,7 @@ class R1IntegralProductRuntimeTests(unittest.IsolatedAsyncioTestCase):
             source_builder=Source,
             client_factory=lambda **_kwargs: http,
             session_builder=lambda **kwargs: sessions.append(SessionClient(**kwargs)) or sessions[-1],
+            initial_delay_seconds=0, retry_delay_seconds=0,
             expected_deployed_sha=DEPLOYED_MERGE_SHA,
             expected_deployed_tree=DEPLOYED_TREE_SHA,
         )
@@ -132,6 +135,62 @@ class R1IntegralProductRuntimeTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(session.kwargs["review_token"], "review-token-fixture-123456789")
         self.assertEqual(runtime._token, bytearray())
         await runtime.close()
+
+    async def test_shared_runtime_retries_sanitized_recoverable_503(self):
+        payload = json.dumps(asdict(evidence())).encode()
+        calls = []
+
+        def handler(request):
+            calls.append(request)
+            if len(calls) == 1:
+                return httpx.Response(503, request=request, json={"detail": {
+                    "state": "WAITING", "stage": "protected_source",
+                    "category": "protected_source_unavailable",
+                    "retryable": True, "attempts": 1,
+                }})
+            return httpx.Response(200, request=request, content=payload)
+
+        http = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+        sleeps = []
+        runtime = ExactR1SharedReviewRuntime(
+            dotenv_path=Path("fixture.env"), source_builder=Source,
+            client_factory=lambda **_kwargs: http,
+            session_builder=SessionClient,
+            max_preflight_attempts=3, initial_delay_seconds=0,
+            retry_delay_seconds=7,
+            sleeper=lambda seconds: sleeps.append(seconds) or AsyncMock()(),
+            expected_deployed_sha=DEPLOYED_MERGE_SHA,
+            expected_deployed_tree=DEPLOYED_TREE_SHA,
+        )
+        result = await runtime.activation_preflight_supplier()
+        self.assertEqual(result.state, "READY-FIRST-CONFIRMATION")
+        self.assertEqual(len(calls), 2)
+        self.assertEqual(sleeps, [7])
+        self.assertEqual(Source.instances[-1].reads, 1)
+        await runtime.close()
+
+    async def test_checkpoint_shortcut_performs_health_only_and_zero_writes(self):
+        class CheckpointSink:
+            def __init__(self): self.closed = False
+            def checkpoint_succeeded(self): return True
+            async def close(self): self.closed = True
+
+        class Health:
+            def __init__(self): self.calls = 0; self.closed = False
+            async def read_exact_once(self): self.calls += 1; return True
+            async def close(self): self.closed = True
+
+        sink, health = CheckpointSink(), Health()
+        result = await resume_integral_checkpoint_once(
+            sink=sink, health=health, local_state_guard=lambda: True
+        )
+        self.assertEqual(result.state, "RECOVERED-DORMANT-VERIFIED")
+        self.assertEqual(result.secret_probe_calls, 0)
+        self.assertEqual(result.secret_write_calls, 0)
+        self.assertEqual(result.app_setting_write_calls, 0)
+        self.assertEqual(health.calls, 1)
+        self.assertTrue(health.closed)
+        self.assertTrue(sink.closed)
 
     async def test_preverified_operation_uses_no_secret_probe(self):
         expected = object()
@@ -205,6 +264,7 @@ class R1IntegralProductRuntimeTests(unittest.IsolatedAsyncioTestCase):
             dotenv_path=Path("fixture.env"), source_builder=Source,
             client_factory=lambda **_kwargs: http,
             session_builder=lambda **kwargs: remote_clients.append(RemoteClient(**kwargs)) or remote_clients[-1],
+            initial_delay_seconds=0, retry_delay_seconds=0,
             expected_deployed_sha=DEPLOYED_MERGE_SHA,
             expected_deployed_tree=DEPLOYED_TREE_SHA,
         )

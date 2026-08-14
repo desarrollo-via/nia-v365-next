@@ -15,6 +15,7 @@ from bitrix_connector.controlled_chat_participant_http import (
 )
 from bitrix_connector.r1_activation_host_preflight import (
     ExactR1ActivationHostPreflight,
+    R1ActivationHostPreflightFailure,
     read_packaged_deployment_identity,
 )
 from bitrix_connector.r1_pre_event_activation_preflight import (
@@ -98,6 +99,49 @@ class ParticipantResources:
 
 
 class R1ActivationHostPreflightTests(unittest.IsolatedAsyncioTestCase):
+    async def test_recoverable_protected_source_does_not_consume_collector(self):
+        class FailingBackend(Backend):
+            async def fetch_exact(self, _target_id):
+                self.fetches += 1
+                raise RuntimeError("fixture-unavailable")
+
+        builds = []
+        oauth = OAuthResources()
+        participant = ParticipantResources()
+
+        def backend_builder(**_kwargs):
+            backend = FailingBackend() if not builds else Backend()
+            builds.append(backend)
+            return backend
+
+        probe = ExactR1ActivationHostPreflight(
+            environ={
+                "NIA_BITRIX_REVIEW_TOKEN": "review-token-fixture-123456789",
+                "NIA_BITRIX_KEY_VAULT_URL": "https://fixture.vault.azure.net",
+                "NIA_BITRIX_R0_BRIDGE_ENABLED": "false",
+                "NIA_BITRIX_EVENT_R1_ENABLED": "false",
+                "NIA_BITRIX_EVENT_R1_PARTICIPANT_STRATEGY": "posterior",
+            },
+            backend_builder=backend_builder,
+            oauth_factory_builder=lambda: OAuthFactory(oauth),
+            http_resources_factory=lambda **_kwargs: participant,
+            deployment_identity_supplier=lambda: (
+                DEPLOYED_MERGE_SHA, DEPLOYED_TREE_SHA
+            ),
+        )
+        with self.assertRaises(R1ActivationHostPreflightFailure) as captured:
+            await probe.collect_once()
+        self.assertEqual(captured.exception.stage, "protected_source")
+        self.assertEqual(
+            captured.exception.category, "protected_source_unavailable"
+        )
+        self.assertTrue(captured.exception.retryable)
+        self.assertEqual(captured.exception.attempts, 1)
+        self.assertTrue(builds[0].closed)
+        evidence = await probe.collect_once()
+        self.assertEqual(evidence.chat_id, 78733)
+        self.assertEqual(len(builds), 2)
+
     async def test_packaged_identity_is_exact_and_rejects_drift(self):
         with TemporaryDirectory() as directory:
             path = Path(directory) / "identity.json"

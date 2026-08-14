@@ -22,6 +22,7 @@ from .r1_key_vault_protected_host_probe import (
     SanitizedProtectedHostProbeEvidence,
 )
 from .r1_pre_event_activation_preflight import R1ActivationPreflightEvidence
+from .r1_activation_host_preflight import R1ActivationHostPreflightFailure
 from .runtime import ConnectorRuntimeUnavailable
 from .security import validate_review_access
 
@@ -172,6 +173,17 @@ def create_review_router(
             )
         try:
             return await activation_preflight.collect_once()
+        except R1ActivationHostPreflightFailure as error:
+            raise HTTPException(
+                status_code=503,
+                detail={
+                    "state": "WAITING" if error.retryable else "NO-GO",
+                    "stage": error.stage,
+                    "category": error.category,
+                    "retryable": error.retryable,
+                    "attempts": error.attempts,
+                },
+            ) from error
         except RuntimeError as error:
             if str(error) == "r1_activation_host_preflight_reused":
                 raise HTTPException(

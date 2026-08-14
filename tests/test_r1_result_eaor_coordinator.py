@@ -17,6 +17,8 @@ class Port:
         value = self.overrides.get(name, default)
         if isinstance(value, BaseException):
             raise value
+        if type(value) is R1EaorStageResult:
+            return value
         return R1EaorStageResult(value)
 
     async def provision_once(self):
@@ -94,6 +96,23 @@ class R1ResultEaorCoordinatorTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn(result.state, {"FAILED-RESTORED", "NO-GO-REMAINDER"})
         self.assertEqual(result.external_retries, 0)
         self.assertEqual(port.calls.count("activate"), 1)
+
+    async def test_preflight_failure_preserves_category_without_fake_restore(self):
+        port = Port(overrides={"activate": R1EaorStageResult(
+            "FAILED-RESTORED", failure_stage="protected_source",
+            failure_category="protected_source_unavailable",
+            external_retries=2, effect_started=False,
+        )})
+        result = await R1ResultEaorCoordinator(port=port).run_until_human_once(
+            acceptance=EAOR_ACCEPTANCE
+        )
+        self.assertEqual(result.state, "FAILED-RESTORED")
+        self.assertEqual(result.failure_stage, "protected_source")
+        self.assertEqual(
+            result.failure_category, "protected_source_unavailable"
+        )
+        self.assertEqual(result.external_retries, 2)
+        self.assertNotIn("restore_activation", port.calls)
 
     async def test_resume_requires_attention_and_is_one_shot(self):
         owner = R1ResultEaorCoordinator(port=Port())

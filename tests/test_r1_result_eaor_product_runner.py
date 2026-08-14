@@ -180,7 +180,7 @@ class R1ResultEaorProductRunnerTests(unittest.IsolatedAsyncioTestCase):
             ).build_runner_once(acceptance="wrong", factories=factories)
         with self.assertRaisesRegex(RuntimeError, "contract_expired"):
             R1ResultEaorProductLauncher(
-                current_day="2026-08-14"
+                current_day="2026-08-15"
             ).build_runner_once(
                 acceptance=EAOR_ACCEPTANCE,
                 factories=factories,

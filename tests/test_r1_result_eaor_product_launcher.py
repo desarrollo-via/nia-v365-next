@@ -32,14 +32,19 @@ class R1ResultEaorProductLauncherTests(unittest.TestCase):
         self.assertEqual(result.messages_sent, 0)
         self.assertTrue(result.execution_exposed)
 
-    def test_next_day_requires_contract_refresh_before_external_preflight(self):
+    def test_successor_day_is_current_and_following_day_requires_refresh(self):
         result = R1ResultEaorProductLauncher(
             current_day="2026-08-14"
         ).preflight_once(confirmation=INERT_PREFLIGHT_CONFIRMATION)
-        self.assertEqual(result.state, "READY-CONTRACT-REFRESH")
-        self.assertFalse(result.external_envelope_current)
-        self.assertTrue(result.exact_bindings_verified)
-        self.assertEqual(result.external_calls, 0)
+        self.assertEqual(result.state, "READY-EXTERNAL-PREFLIGHT")
+        self.assertTrue(result.external_envelope_current)
+        expired = R1ResultEaorProductLauncher(
+            current_day="2026-08-15"
+        ).preflight_once(confirmation=INERT_PREFLIGHT_CONFIRMATION)
+        self.assertEqual(expired.state, "READY-CONTRACT-REFRESH")
+        self.assertFalse(expired.external_envelope_current)
+        self.assertTrue(expired.exact_bindings_verified)
+        self.assertEqual(expired.external_calls, 0)
 
     def test_wrong_confirmation_stops_before_binding_audit(self):
         result = R1ResultEaorProductLauncher().preflight_once(

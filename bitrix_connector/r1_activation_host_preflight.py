@@ -44,6 +44,22 @@ from .config import load_settings
 
 
 DEPLOYMENT_IDENTITY_PATH = Path(__file__).with_name("_deployment_identity.json")
+MAX_HOST_PREFLIGHT_ATTEMPTS = 3
+
+
+class R1ActivationHostPreflightFailure(RuntimeError):
+    """Sanitized failure without an external value or exception text."""
+
+    __slots__ = ("attempts", "category", "retryable", "stage")
+
+    def __init__(
+        self, *, stage: str, category: str, retryable: bool, attempts: int
+    ) -> None:
+        super().__init__("r1_activation_host_preflight_unavailable")
+        self.stage = stage
+        self.category = category
+        self.retryable = retryable
+        self.attempts = attempts
 
 
 def read_packaged_deployment_identity() -> tuple[str, str]:
@@ -65,7 +81,8 @@ class ExactR1ActivationHostPreflight:
     """Reads one exact protected record and one participant page, then closes."""
 
     __slots__ = (
-        "_backend_builder", "_deployment_identity_supplier", "_environ", "_http_resources_factory",
+        "_attempts", "_backend_builder", "_deployment_identity_supplier",
+        "_environ", "_http_resources_factory", "_max_attempts",
         "_oauth_factory_builder", "_settings_loader", "_used",
     )
 
@@ -78,10 +95,13 @@ class ExactR1ActivationHostPreflight:
         http_resources_factory=ControlledParticipantHttpResources.build,
         settings_loader=load_settings,
         deployment_identity_supplier=read_packaged_deployment_identity,
+        max_attempts: int = MAX_HOST_PREFLIGHT_ATTEMPTS,
     ) -> None:
         if (
             environ is None
             or not callable(getattr(environ, "__getitem__", None))
+            or type(max_attempts) is not int
+            or not 1 <= max_attempts <= MAX_HOST_PREFLIGHT_ATTEMPTS
             or not all(callable(item) for item in (
                 backend_builder, oauth_factory_builder,
                 http_resources_factory, settings_loader,
@@ -95,12 +115,15 @@ class ExactR1ActivationHostPreflight:
         self._http_resources_factory = http_resources_factory
         self._settings_loader = settings_loader
         self._deployment_identity_supplier = deployment_identity_supplier
+        self._max_attempts = max_attempts
+        self._attempts = 0
         self._used = False
 
     async def collect_once(self) -> R1ActivationPreflightEvidence:
-        if self._used:
+        if self._used or self._attempts >= self._max_attempts:
             raise RuntimeError("r1_activation_host_preflight_reused")
-        self._used = True
+        self._attempts += 1
+        stage = "baseline"
         oauth_resources = None
         participant_resources = None
         try:
@@ -114,10 +137,12 @@ class ExactR1ActivationHostPreflight:
             ):
                 raise RuntimeError("r1_activation_host_baseline_invalid")
 
+            stage = "switches"
             switches = await ExactSwitchBaselineProbe(
                 source=MappingExactSwitchValueSource(self._environ)
             ).collect(names=SWITCH_ORDER)
 
+            stage = "protected_source"
             builder = ProtectedStoredOAuthResourcesBuilder(
                 credential_backend=self._backend_builder(
                     vault_url=public_settings.key_vault_url
@@ -127,6 +152,7 @@ class ExactR1ActivationHostPreflight:
                 settings_loader=self._settings_loader,
             )
             oauth_resources = await builder()
+            stage = "oauth"
             token = await oauth_resources.oauth_provider.get_access_token(
                 oauth_resources.member_id
             )
@@ -136,6 +162,7 @@ class ExactR1ActivationHostPreflight:
                 timeout_seconds=PROTECTED_PRE_EVENT_OAUTH_TIMEOUT_SECONDS,
             )
             token = ""
+            stage = "participants"
             participant_read = await participant_resources.reader.read()
             if (
                 participant_read.decision is not ParticipantHttpDecision.SUCCESS
@@ -149,6 +176,7 @@ class ExactR1ActivationHostPreflight:
             await oauth_resources.close()
             oauth_resources = None
 
+            stage = "deployment_identity"
             deployed_sha, deployed_tree = self._deployment_identity_supplier()
             deployment = SanitizedDeploymentEvidence(
                 deployed_sha=deployed_sha,
@@ -177,7 +205,7 @@ class ExactR1ActivationHostPreflight:
                 bot_nia_absent=BOT_NIA_ID not in snapshot.participant_ids,
                 bot_next_absent=BOT_NEXT_ID not in snapshot.participant_ids,
             )
-            return R1ActivationPreflightEvidence(
+            evidence = R1ActivationPreflightEvidence(
                 deployed_sha=deployment.deployed_sha,
                 deployed_tree=deployment.deployed_tree,
                 workflow_success=deployment.workflow_success,
@@ -201,20 +229,36 @@ class ExactR1ActivationHostPreflight:
                 bot_nia_absent=participants.bot_nia_absent,
                 bot_next_absent=participants.bot_next_absent,
             )
+            self._used = True
+            return evidence
         except Exception:
-            raise RuntimeError("r1_activation_host_preflight_no_go") from None
+            retryable = stage in {"protected_source", "oauth", "participants"}
+            category = {
+                "protected_source": "protected_source_unavailable",
+                "oauth": "oauth_unavailable",
+                "participants": "participants_unavailable",
+            }.get(stage, "material_drift")
+            if not retryable or self._attempts >= self._max_attempts:
+                self._used = True
+            raise R1ActivationHostPreflightFailure(
+                stage=stage,
+                category=category,
+                retryable=retryable and not self._used,
+                attempts=self._attempts,
+            ) from None
         finally:
-            self._environ = {}
-            self._backend_builder = None
-            self._oauth_factory_builder = None
-            self._http_resources_factory = None
-            self._settings_loader = None
-            self._deployment_identity_supplier = None
             if participant_resources is not None:
                 try:
                     await participant_resources.close()
                 except BaseException:
                     pass
+            if self._used:
+                self._environ = {}
+                self._backend_builder = None
+                self._oauth_factory_builder = None
+                self._http_resources_factory = None
+                self._settings_loader = None
+                self._deployment_identity_supplier = None
             if oauth_resources is not None:
                 try:
                     await oauth_resources.close()
@@ -232,6 +276,7 @@ def build_r1_activation_host_preflight() -> ExactR1ActivationHostPreflight:
 
 
 __all__ = [
-    "DEPLOYMENT_IDENTITY_PATH", "ExactR1ActivationHostPreflight",
+    "DEPLOYMENT_IDENTITY_PATH", "MAX_HOST_PREFLIGHT_ATTEMPTS",
+    "R1ActivationHostPreflightFailure", "ExactR1ActivationHostPreflight",
     "build_r1_activation_host_preflight", "read_packaged_deployment_identity",
 ]
