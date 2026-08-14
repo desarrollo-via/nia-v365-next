@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 from pathlib import Path
 
@@ -16,8 +17,10 @@ from .r1_key_vault_protected_probe_dotenv_source import (
 from .r1_key_vault_protected_probe_invocation_owner import REVIEW_TOKEN_NAME
 from .r1_key_vault_recovery_resume import (
     ExactBearerSecretSink,
+    RecoveryResumeResult,
     recover_and_resume_once,
 )
+from .r1_key_vault_linux_provisioning_real_binding import ExactDormantHealthReader
 from .r1_pre_event_activation_preflight import (
     R1ActivationPreflight,
     R1ActivationPreflightEvidence,
@@ -34,6 +37,22 @@ ACTIVATION_PREFLIGHT_ENDPOINT = (
     f"{PUBLIC_ORIGIN}/bitrix-connector/review/r1-activation-preflight"
 )
 MAX_PREFLIGHT_RESPONSE_BYTES = 4096
+MAX_ACTIVATION_PREFLIGHT_ATTEMPTS = 3
+ACTIVATION_PREFLIGHT_INITIAL_DELAY_SECONDS = 15
+ACTIVATION_PREFLIGHT_RETRY_SECONDS = 30
+
+
+class R1SharedReviewPreflightFailure(RuntimeError):
+    __slots__ = ("attempts", "category", "retryable", "stage")
+
+    def __init__(
+        self, *, stage: str, category: str, retryable: bool, attempts: int
+    ) -> None:
+        super().__init__("r1_shared_review_preflight_unavailable")
+        self.stage = stage
+        self.category = category
+        self.retryable = retryable
+        self.attempts = attempts
 
 
 class PersistentOneShotBearerSecretSink:
@@ -136,12 +155,64 @@ async def resume_preverified_absence_once(**kwargs):
     return await recover_and_resume_once(**selected)
 
 
+async def resume_integral_checkpoint_once(**kwargs):
+    """Uses the confirmed PUT checkpoint without repeating provisioning writes."""
+
+    selected = dict(kwargs)
+    sink = selected.get("sink")
+    checkpoint = bool(
+        callable(getattr(sink, "checkpoint_succeeded", None))
+        and sink.checkpoint_succeeded()
+    )
+    if not checkpoint:
+        return await resume_preverified_absence_once(**selected)
+
+    health = selected.get("health") or ExactDormantHealthReader()
+    resources_closed = True
+    healthy = False
+    try:
+        healthy = bool(
+            selected.get("local_state_guard", lambda: True)() is True
+            and await health.read_exact_once() is True
+        )
+    finally:
+        for resource in (health, sink):
+            close = getattr(resource, "close", None)
+            if callable(close):
+                try:
+                    result = close()
+                    if hasattr(result, "__await__"):
+                        await result
+                except BaseException:
+                    resources_closed = False
+    return RecoveryResumeResult(
+        state=(
+            "RECOVERED-DORMANT-VERIFIED"
+            if healthy and resources_closed
+            else "NO-GO-REMAINDER"
+        ),
+        failure_stage="none" if healthy else "dormant_health",
+        failure_category="none" if healthy else "drift",
+        preflight_reads=0,
+        recovery_calls=0,
+        secret_probe_calls=0,
+        protected_source_reads=0,
+        secret_write_calls=0,
+        app_setting_write_calls=0,
+        rollback_calls=0,
+        resources_closed=resources_closed,
+        secret_existed=True,
+    )
+
+
 class ExactR1SharedReviewRuntime:
     """Reads the review token once and transfers it to the later session client."""
 
     __slots__ = (
-        "_client_factory", "_dotenv_path", "_preflight_used", "_session_builder",
-        "_expected_sha", "_expected_tree", "_session_used", "_source_builder", "_token",
+        "_client_factory", "_dotenv_path", "_expected_sha", "_expected_tree",
+        "_initial_delay", "_max_preflight_attempts", "_preflight_used",
+        "_retry_delay", "_session_builder", "_session_used", "_sleeper",
+        "_source_builder", "_token",
     )
 
     def __init__(
@@ -151,13 +222,23 @@ class ExactR1SharedReviewRuntime:
         source_builder=ExactReviewTokenDotenvSource,
         client_factory=httpx.AsyncClient,
         session_builder=ExactR1RemoteSessionHttpClient,
+        max_preflight_attempts: int = MAX_ACTIVATION_PREFLIGHT_ATTEMPTS,
+        initial_delay_seconds: int = ACTIVATION_PREFLIGHT_INITIAL_DELAY_SECONDS,
+        retry_delay_seconds: int = ACTIVATION_PREFLIGHT_RETRY_SECONDS,
+        sleeper=asyncio.sleep,
         expected_deployed_sha: str,
         expected_deployed_tree: str,
     ) -> None:
         if (
             not isinstance(dotenv_path, Path)
+            or type(max_preflight_attempts) is not int
+            or not 1 <= max_preflight_attempts <= MAX_ACTIVATION_PREFLIGHT_ATTEMPTS
+            or type(initial_delay_seconds) is not int
+            or not 0 <= initial_delay_seconds <= 120
+            or type(retry_delay_seconds) is not int
+            or not 0 <= retry_delay_seconds <= 120
             or not all(callable(item) for item in (
-                source_builder, client_factory, session_builder,
+                source_builder, client_factory, session_builder, sleeper,
             ))
         ):
             raise TypeError("r1_shared_review_runtime_dependency_invalid")
@@ -174,6 +255,10 @@ class ExactR1SharedReviewRuntime:
         self._source_builder = source_builder
         self._client_factory = client_factory
         self._session_builder = session_builder
+        self._max_preflight_attempts = max_preflight_attempts
+        self._initial_delay = initial_delay_seconds
+        self._retry_delay = retry_delay_seconds
+        self._sleeper = sleeper
         self._token = bytearray()
         self._preflight_used = False
         self._session_used = False
@@ -197,28 +282,85 @@ class ExactR1SharedReviewRuntime:
             client = self._client_factory(
                 timeout=30, follow_redirects=False, trust_env=False
             )
-            async with client.stream(
-                "GET",
-                ACTIVATION_PREFLIGHT_ENDPOINT,
-                headers={"Authorization": authorization, "Accept": "application/json"},
-            ) as response:
-                if response.status_code != 200:
-                    raise RuntimeError("r1_shared_review_preflight_failed")
-                async for chunk in response.aiter_bytes():
-                    if len(body) + len(chunk) > MAX_PREFLIGHT_RESPONSE_BYTES:
-                        raise RuntimeError("r1_shared_review_preflight_oversized")
-                    body.extend(chunk)
-            payload = json.loads(bytes(body).decode("utf-8"))
-            evidence = TypeAdapter(R1ActivationPreflightEvidence).validate_python(payload)
-            result = audit_r1_activation_preflight(
-                evidence,
-                expected_deployed_sha=self._expected_sha,
-                expected_deployed_tree=self._expected_tree,
-            )
-            if result.state != "READY-FIRST-CONFIRMATION":
-                await self.close()
-            return result
-        except (UnicodeDecodeError, ValueError, ValidationError, httpx.HTTPError):
+            if self._initial_delay:
+                await self._sleeper(self._initial_delay)
+            for attempt in range(1, self._max_preflight_attempts + 1):
+                body[:] = b"\x00" * len(body)
+                body.clear()
+                try:
+                    async with client.stream(
+                        "GET",
+                        ACTIVATION_PREFLIGHT_ENDPOINT,
+                        headers={
+                            "Authorization": authorization,
+                            "Accept": "application/json",
+                        },
+                    ) as response:
+                        async for chunk in response.aiter_bytes():
+                            if len(body) + len(chunk) > MAX_PREFLIGHT_RESPONSE_BYTES:
+                                raise RuntimeError(
+                                    "r1_shared_review_preflight_oversized"
+                                )
+                            body.extend(chunk)
+                        status_code = response.status_code
+                except httpx.HTTPError:
+                    if attempt < self._max_preflight_attempts:
+                        if self._retry_delay:
+                            await self._sleeper(self._retry_delay)
+                        continue
+                    raise R1SharedReviewPreflightFailure(
+                        stage="transport", category="transport_unavailable",
+                        retryable=False, attempts=attempt,
+                    ) from None
+
+                payload = json.loads(bytes(body).decode("utf-8"))
+                if status_code == 200:
+                    evidence = TypeAdapter(
+                        R1ActivationPreflightEvidence
+                    ).validate_python(payload)
+                    result = audit_r1_activation_preflight(
+                        evidence,
+                        expected_deployed_sha=self._expected_sha,
+                        expected_deployed_tree=self._expected_tree,
+                    )
+                    if result.state != "READY-FIRST-CONFIRMATION":
+                        await self.close()
+                    return result
+
+                detail = payload.get("detail") if type(payload) is dict else None
+                if status_code == 503 and type(detail) is dict:
+                    stage = detail.get("stage")
+                    category = detail.get("category")
+                    retryable = detail.get("retryable") is True
+                    if not (
+                        type(stage) is str
+                        and stage in {
+                            "baseline", "switches", "protected_source", "oauth",
+                            "participants", "deployment_identity",
+                        }
+                        and type(category) is str
+                        and category in {
+                            "material_drift", "protected_source_unavailable",
+                            "oauth_unavailable", "participants_unavailable",
+                        }
+                    ):
+                        raise ValueError("r1_shared_review_failure_shape_invalid")
+                    if retryable and attempt < self._max_preflight_attempts:
+                        if self._retry_delay:
+                            await self._sleeper(self._retry_delay)
+                        continue
+                    raise R1SharedReviewPreflightFailure(
+                        stage=stage, category=category, retryable=False,
+                        attempts=attempt,
+                    )
+                raise R1SharedReviewPreflightFailure(
+                    stage="http", category=(
+                        "collector_consumed" if status_code == 409
+                        else "unexpected_status"
+                    ), retryable=False, attempts=attempt,
+                )
+            raise RuntimeError("r1_shared_review_preflight_loop_invalid")
+        except (UnicodeDecodeError, ValueError, ValidationError):
             await self.close()
             raise RuntimeError("r1_shared_review_preflight_invalid") from None
         except BaseException:
@@ -262,6 +404,7 @@ class ExactR1SharedReviewRuntime:
         self._source_builder = None
         self._client_factory = None
         self._session_builder = None
+        self._sleeper = None
         self._expected_sha = ""
         self._expected_tree = ""
 
@@ -274,7 +417,7 @@ def build_integral_product_factory_binding(
     local_state_guard,
     shared_review_runtime: ExactR1SharedReviewRuntime,
     provisioning_sink=None,
-    provisioning_operation=resume_preverified_absence_once,
+    provisioning_operation=resume_integral_checkpoint_once,
     provisioning_runner=None,
     provisioning_health=None,
     provisioning_source_builder=None,
@@ -309,6 +452,7 @@ def build_integral_product_factory_binding(
 
 __all__ = [
     "ACTIVATION_PREFLIGHT_ENDPOINT", "ExactR1SharedReviewRuntime",
+    "R1SharedReviewPreflightFailure",
     "PersistentOneShotBearerSecretSink", "build_integral_product_factory_binding",
-    "resume_preverified_absence_once",
+    "resume_integral_checkpoint_once", "resume_preverified_absence_once",
 ]

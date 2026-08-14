@@ -41,6 +41,10 @@ class R1EaorStageResult:
     state: StageState
     resources_closed: bool = True
     local_state_preserved: bool = True
+    failure_stage: str = "none"
+    failure_category: str = "none"
+    external_retries: int = 0
+    effect_started: bool = True
 
 
 class R1EaorPort(Protocol):
@@ -68,13 +72,18 @@ class R1ResultEaorSnapshot:
     resources_closed: bool = False
     human_message_required_now: bool = False
     pre_event_lease_state: str = "INERT"
-    external_retries: Literal[0] = 0
+    external_retries: int = 0
+    failure_stage: str = "none"
+    failure_category: str = "none"
 
 
 class R1ResultEaorCoordinator:
     """Runs all pre-human stages and resumes once after the manual message."""
 
-    __slots__ = ("_counts", "_port", "_state", "_waiting", "_used")
+    __slots__ = (
+        "_counts", "_failure_category", "_failure_stage", "_port",
+        "_state", "_waiting", "_used",
+    )
 
     def __init__(self, *, port: R1EaorPort) -> None:
         required = (
@@ -87,6 +96,8 @@ class R1ResultEaorCoordinator:
         self._state: EaorState = "INERT"
         self._used = False
         self._waiting = False
+        self._failure_stage = "none"
+        self._failure_category = "none"
         self._counts = {
             "acceptance": 0,
             "provisioning": 0,
@@ -94,6 +105,7 @@ class R1ResultEaorCoordinator:
             "arm": 0,
             "observation": 0,
             "restore_activation": 0,
+            "external_retries": 0,
         }
 
     def _snapshot(
@@ -110,6 +122,9 @@ class R1ResultEaorCoordinator:
             resources_closed=closed,
             human_message_required_now=attention,
             pre_event_lease_state="AWAITING-EVENT" if attention else "INERT",
+            external_retries=self._counts["external_retries"],
+            failure_stage=self._failure_stage,
+            failure_category=self._failure_category,
         )
 
     async def _close_once(self) -> bool:
@@ -159,13 +174,27 @@ class R1ResultEaorCoordinator:
             self._counts[name] = 1
             try:
                 result = await operation()
-            except BaseException:
-                result = R1EaorStageResult("NO-GO-REMAINDER", False, False)
+            except BaseException as error:
+                result = R1EaorStageResult(
+                    "NO-GO-REMAINDER", False, False,
+                    failure_stage=getattr(error, "stage", name),
+                    failure_category=getattr(error, "category", "unhandled"),
+                    external_retries=max(0, getattr(error, "attempts", 1) - 1),
+                )
+            self._failure_stage = result.failure_stage
+            self._failure_category = result.failure_category
+            self._counts["external_retries"] += result.external_retries
             if type(result) is not R1EaorStageResult or not result.resources_closed:
                 self._state = "NO-GO-REMAINDER"
                 return self._snapshot(closed=await self._close_once())
             if result.state != expected:
-                if name != "provisioning":
+                if (
+                    name == "activation"
+                    and result.state == "FAILED-RESTORED"
+                    and not result.effect_started
+                ):
+                    self._state = "FAILED-RESTORED"
+                elif name != "provisioning":
                     restored = await self._restore_activation()
                     self._state = "FAILED-RESTORED" if restored else "NO-GO-REMAINDER"
                 else:

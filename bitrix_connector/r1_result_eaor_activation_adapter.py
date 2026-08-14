@@ -40,8 +40,18 @@ class R1EaorActivationOwnerAdapter:
         if self._used:
             raise RuntimeError("r1_eaor_activation_adapter_reused")
         self._used = True
-        supplied = self._preflight_supplier()
-        preflight = await supplied if inspect.isawaitable(supplied) else supplied
+        try:
+            supplied = self._preflight_supplier()
+            preflight = await supplied if inspect.isawaitable(supplied) else supplied
+        except RuntimeError as error:
+            return R1EaorStageResult(
+                "FAILED-RESTORED",
+                resources_closed=True,
+                failure_stage=getattr(error, "stage", "activation_preflight"),
+                failure_category=getattr(error, "category", "preflight_unavailable"),
+                external_retries=max(0, getattr(error, "attempts", 1) - 1),
+                effect_started=False,
+            )
         prepared = await self._owner.prepare_once(
             preflight=preflight,
             first_confirmation=FIRST_ACTIVATION_CONFIRMATION,

@@ -97,6 +97,8 @@ class R1EaorRecoveryResumeAdapter:
         return R1EaorStageResult(
             mapping.get(result.state, "NO-GO-REMAINDER"),
             resources_closed=result.resources_closed,
+            failure_stage=result.failure_stage,
+            failure_category=result.failure_category,
         )
 
 
