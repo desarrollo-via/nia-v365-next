@@ -347,6 +347,19 @@ class ExactR1SharedReviewRuntime:
                             "baseline_r0_bridge_enabled",
                             "baseline_event_r1_enabled",
                             "baseline_participant_strategy_drift",
+                            "participant_list_pagination_cycle",
+                            "participant_list_transport_uncertain",
+                            "participant_list_remote_uncertain",
+                            "participant_list_rejected",
+                            "participant_list_invalid_response",
+                            "participant_list_empty_not_authoritative",
+                            "participant_list_page_size_invalid",
+                            "participant_list_identity_conflict",
+                            "participant_list_total_conflict",
+                            "participant_list_truncated",
+                            "participant_list_pagination_invalid",
+                            "participant_list_page_limit_exceeded",
+                            "participant_list_multiple_pages",
                         }
                     ):
                         raise ValueError("r1_shared_review_failure_shape_invalid")
