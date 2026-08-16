@@ -269,6 +269,35 @@ class R1ActivationHostPreflightTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(raised.exception.category, expected)
                 self.assertFalse(raised.exception.retryable)
 
+    async def test_participant_failure_preserves_reader_category(self):
+        class FailedReader:
+            async def read(self):
+                return ParticipantReadResult(
+                    decision=ParticipantHttpDecision.FAIL,
+                    error_code="participant_list_rejected", http_status=403,
+                    pages=1,
+                )
+        participant = ParticipantResources()
+        participant.reader = FailedReader()
+        probe = ExactR1ActivationHostPreflight(
+            environ={
+                "NIA_BITRIX_REVIEW_TOKEN": "review-token-fixture-123456789",
+                "NIA_BITRIX_KEY_VAULT_URL": "https://fixture.vault.azure.net",
+                "NIA_BITRIX_R0_BRIDGE_ENABLED": "false",
+                "NIA_BITRIX_EVENT_R1_ENABLED": "false",
+                "NIA_BITRIX_EVENT_R1_PARTICIPANT_STRATEGY": "posterior",
+            },
+            backend_builder=lambda **_kwargs: Backend(),
+            oauth_factory_builder=lambda: OAuthFactory(OAuthResources()),
+            http_resources_factory=lambda **_kwargs: participant,
+            deployment_identity_supplier=lambda: (DEPLOYED_MERGE_SHA, DEPLOYED_TREE_SHA),
+        )
+        with self.assertRaises(R1ActivationHostPreflightFailure) as raised:
+            await probe.collect_once()
+        self.assertEqual(raised.exception.stage, "participants")
+        self.assertEqual(raised.exception.category, "participant_list_rejected")
+        self.assertTrue(raised.exception.retryable)
+
 
 if __name__ == "__main__":
     unittest.main()

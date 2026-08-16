@@ -195,6 +195,27 @@ class R1IntegralProductRuntimeTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(raised.exception.retryable)
         await runtime.close()
 
+    async def test_shared_runtime_accepts_exact_participant_category(self):
+        def handler(request):
+            return httpx.Response(503, request=request, json={"detail": {
+                "state": "NO-GO", "stage": "participants",
+                "category": "participant_list_rejected",
+                "retryable": False, "attempts": 3,
+            }})
+        http = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+        runtime = ExactR1SharedReviewRuntime(
+            dotenv_path=Path("fixture.env"), source_builder=Source,
+            client_factory=lambda **_kwargs: http, session_builder=SessionClient,
+            initial_delay_seconds=0, retry_delay_seconds=0,
+            expected_deployed_sha=DEPLOYED_MERGE_SHA,
+            expected_deployed_tree=DEPLOYED_TREE_SHA,
+        )
+        with self.assertRaises(R1SharedReviewPreflightFailure) as raised:
+            await runtime.activation_preflight_supplier()
+        self.assertEqual(raised.exception.category, "participant_list_rejected")
+        self.assertEqual(raised.exception.attempts, 1)
+        await runtime.close()
+
     async def test_checkpoint_shortcut_performs_health_only_and_zero_writes(self):
         class CheckpointSink:
             def __init__(self): self.closed = False

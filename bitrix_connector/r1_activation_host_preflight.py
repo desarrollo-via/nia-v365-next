@@ -45,6 +45,15 @@ from .config import load_settings
 
 DEPLOYMENT_IDENTITY_PATH = Path(__file__).with_name("_deployment_identity.json")
 MAX_HOST_PREFLIGHT_ATTEMPTS = 3
+PARTICIPANT_FAILURE_CATEGORIES = frozenset({
+    "participant_list_pagination_cycle", "participant_list_transport_uncertain",
+    "participant_list_remote_uncertain", "participant_list_rejected",
+    "participant_list_invalid_response", "participant_list_empty_not_authoritative",
+    "participant_list_page_size_invalid", "participant_list_identity_conflict",
+    "participant_list_total_conflict", "participant_list_truncated",
+    "participant_list_pagination_invalid", "participant_list_page_limit_exceeded",
+    "participant_list_multiple_pages",
+})
 
 
 class R1ActivationHostPreflightFailure(RuntimeError):
@@ -171,7 +180,15 @@ class ExactR1ActivationHostPreflight:
             )
             token = ""
             stage = "participants"
+            category = "participants_unavailable"
             participant_read = await participant_resources.reader.read()
+            if participant_read.error_code in PARTICIPANT_FAILURE_CATEGORIES:
+                category = participant_read.error_code
+            elif (
+                participant_read.decision is ParticipantHttpDecision.SUCCESS
+                and participant_read.pages != 1
+            ):
+                category = "participant_list_multiple_pages"
             if (
                 participant_read.decision is not ParticipantHttpDecision.SUCCESS
                 or participant_read.snapshot is None
@@ -244,7 +261,7 @@ class ExactR1ActivationHostPreflight:
             category = {
                 "protected_source": "protected_source_unavailable",
                 "oauth": "oauth_unavailable",
-                "participants": "participants_unavailable",
+                "participants": category,
             }.get(stage, category)
             if not retryable or self._attempts >= self._max_attempts:
                 self._used = True
