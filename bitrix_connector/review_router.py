@@ -182,6 +182,14 @@ def create_review_router(
                     "category": error.category,
                     "retryable": error.retryable,
                     "attempts": error.attempts,
+                    **(
+                        {"participant_http_status": error.http_status}
+                        if error.http_status is not None else {}
+                    ),
+                    **(
+                        {"participant_remote_code": error.remote_code}
+                        if error.remote_code is not None else {}
+                    ),
                 },
             ) from error
         except RuntimeError as error:

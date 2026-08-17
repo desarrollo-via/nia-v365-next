@@ -275,6 +275,7 @@ class R1ActivationHostPreflightTests(unittest.IsolatedAsyncioTestCase):
                 return ParticipantReadResult(
                     decision=ParticipantHttpDecision.FAIL,
                     error_code="participant_list_rejected", http_status=403,
+                    remote_code="ACCESS_DENIED",
                     pages=1,
                 )
         participant = ParticipantResources()
@@ -296,6 +297,8 @@ class R1ActivationHostPreflightTests(unittest.IsolatedAsyncioTestCase):
             await probe.collect_once()
         self.assertEqual(raised.exception.stage, "participants")
         self.assertEqual(raised.exception.category, "participant_list_rejected")
+        self.assertEqual(raised.exception.http_status, 403)
+        self.assertEqual(raised.exception.remote_code, "ACCESS_DENIED")
         self.assertTrue(raised.exception.retryable)
 
 
