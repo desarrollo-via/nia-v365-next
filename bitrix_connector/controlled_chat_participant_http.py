@@ -33,6 +33,13 @@ _UNCERTAIN_CODES = {
     "ERROR_UNEXPECTED_ANSWER",
     "OVERLOAD_LIMIT",
 }
+_REJECTED_CODES = {
+    "ACCESS_DENIED", "CHAT_NOT_IN_CRM", "CRM_CHAT_USER_NOT_ACTIVE",
+    "ERROR_ARGUMENT", "ERROR_MANIFEST_IS_NOT_AVAILABLE",
+    "INVALID_CREDENTIALS", "INVALID_REQUEST", "NO_AUTH_FOUND",
+    "PORTAL_DELETED", "expired_token", "insufficient_scope",
+    "user_access_error",
+}
 
 
 class _ParticipantSafetyBlocked(Exception):
@@ -65,16 +72,28 @@ class ParticipantReadResult:
     snapshot: Optional[ChatParticipantSnapshot] = None
     error_code: Optional[str] = None
     http_status: Optional[int] = None
+    remote_code: Optional[str] = None
     pages: int = 0
 
     def __post_init__(self) -> None:
         if self.pages < 0 or self.pages > MAX_PARTICIPANT_LIST_PAGES:
             raise ValueError("participant_read_pages_invalid")
         if self.decision is ParticipantHttpDecision.SUCCESS:
-            if self.snapshot is None or self.error_code is not None:
+            if (
+                self.snapshot is None
+                or self.error_code is not None
+                or self.remote_code is not None
+            ):
                 raise ValueError("participant_read_success_invalid")
             return
-        if self.snapshot is not None or not self.error_code:
+        if (
+            self.snapshot is not None
+            or not self.error_code
+            or (
+                self.remote_code is not None
+                and self.remote_code not in _REJECTED_CODES
+            )
+        ):
             raise ValueError("participant_read_failure_invalid")
 
 
@@ -163,6 +182,9 @@ class BitrixChatParticipantReader:
                     "participant_list_rejected",
                     status=status,
                     pages=page,
+                    remote_code=(
+                        remote_code if remote_code in _REJECTED_CODES else None
+                    ),
                 )
             try:
                 parsed = _ParticipantListResponse.model_validate(
@@ -257,12 +279,14 @@ class BitrixChatParticipantReader:
         *,
         status: Optional[int] = None,
         pages: int,
+        remote_code: Optional[str] = None,
     ) -> ParticipantReadResult:
         return ParticipantReadResult(
             decision=ParticipantHttpDecision.FAIL,
             error_code=code,
             http_status=status,
             pages=pages,
+            remote_code=remote_code,
         )
 
     async def close(self) -> None:

@@ -59,14 +59,20 @@ PARTICIPANT_FAILURE_CATEGORIES = frozenset({
 class R1ActivationHostPreflightFailure(RuntimeError):
     """Sanitized failure without an external value or exception text."""
 
-    __slots__ = ("attempts", "category", "retryable", "stage")
+    __slots__ = (
+        "attempts", "category", "http_status", "remote_code", "retryable",
+        "stage",
+    )
 
     def __init__(
-        self, *, stage: str, category: str, retryable: bool, attempts: int
+        self, *, stage: str, category: str, retryable: bool, attempts: int,
+        http_status: int | None = None, remote_code: str | None = None,
     ) -> None:
         super().__init__("r1_activation_host_preflight_unavailable")
         self.stage = stage
         self.category = category
+        self.http_status = http_status
+        self.remote_code = remote_code
         self.retryable = retryable
         self.attempts = attempts
 
@@ -134,6 +140,8 @@ class ExactR1ActivationHostPreflight:
         self._attempts += 1
         stage = "baseline"
         category = "material_drift"
+        participant_http_status = None
+        participant_remote_code = None
         oauth_resources = None
         participant_resources = None
         try:
@@ -182,6 +190,8 @@ class ExactR1ActivationHostPreflight:
             stage = "participants"
             category = "participants_unavailable"
             participant_read = await participant_resources.reader.read()
+            participant_http_status = participant_read.http_status
+            participant_remote_code = participant_read.remote_code
             if participant_read.error_code in PARTICIPANT_FAILURE_CATEGORIES:
                 category = participant_read.error_code
             elif (
@@ -270,6 +280,12 @@ class ExactR1ActivationHostPreflight:
                 category=category,
                 retryable=retryable and not self._used,
                 attempts=self._attempts,
+                http_status=(
+                    participant_http_status if stage == "participants" else None
+                ),
+                remote_code=(
+                    participant_remote_code if stage == "participants" else None
+                ),
             ) from None
         finally:
             if participant_resources is not None:

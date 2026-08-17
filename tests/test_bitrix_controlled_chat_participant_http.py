@@ -104,6 +104,23 @@ class ControlledChatParticipantHttpTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertIsNone(result.snapshot)
 
+    async def test_reader_preserves_only_allowlisted_rejection_code(self):
+        async def handler(_request):
+            return httpx.Response(403, json={"error": "ACCESS_DENIED"})
+
+        http = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+        self.addAsyncCleanup(http.aclose)
+        result = await BitrixChatParticipantReader(
+            portal_url="https://portal.bitrix24.test",
+            access_token="token",
+            timeout_seconds=3,
+            http_client=http,
+        ).read()
+
+        self.assertEqual(result.error_code, "participant_list_rejected")
+        self.assertEqual(result.http_status, 403)
+        self.assertEqual(result.remote_code, "ACCESS_DENIED")
+
     async def test_reader_rejects_truncation_and_pagination_cycles(self):
         cases = (
             {"result": [99], "total": 2},
