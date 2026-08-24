@@ -124,6 +124,7 @@ from response_engine import (
 )
 from optional_bitrix_connector import mount_optional_bitrix_connector
 from optional_wazzup_r0_ingress import mount_optional_wazzup_r0_ingress
+from optional_r1_oauth_refresh_internal import mount_optional_r1_oauth_refresh_internal
 
 
 # ─────────────────────────────────────────────────────────────
@@ -198,6 +199,9 @@ logger.info(
     "Wazzup R0 ingress status: %s",
     wazzup_r0_ingress_mount.status.value,
 )
+r1_oauth_refresh_mount = mount_optional_r1_oauth_refresh_internal(app, logger=logger)
+app.state.r1_oauth_refresh_internal_status = r1_oauth_refresh_mount.reason
+logger.info("R1 OAuth refresh internal route: %s", r1_oauth_refresh_mount.reason)
 
 
 @app.on_event("startup")
@@ -5861,3 +5865,14 @@ async def health():
         "status": "ok",
         "servicio": "NIA ViaIndustrial",
     }
+
+
+@app.get("/health/r1-oauth-refresh-internal")
+async def r1_oauth_refresh_internal_health():
+    """Señal pública fija: no incluye configuración, valores ni identidad."""
+
+    status = getattr(app.state, "r1_oauth_refresh_internal_status", "unavailable")
+    return {"status": status if status in {
+        "mounted", "already_mounted", "configuration_missing",
+        "jwks_uri_rejected", "composition_failed",
+    } else "unavailable"}
