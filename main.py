@@ -5865,3 +5865,14 @@ async def health():
         "status": "ok",
         "servicio": "NIA ViaIndustrial",
     }
+
+
+@app.get("/health/r1-oauth-refresh-internal")
+async def r1_oauth_refresh_internal_health():
+    """Señal pública fija: no incluye configuración, valores ni identidad."""
+
+    status = getattr(app.state, "r1_oauth_refresh_internal_status", "unavailable")
+    return {"status": status if status in {
+        "mounted", "already_mounted", "configuration_missing",
+        "jwks_uri_rejected", "composition_failed",
+    } else "unavailable"}
