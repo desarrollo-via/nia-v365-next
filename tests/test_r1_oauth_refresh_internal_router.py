@@ -9,6 +9,9 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from bitrix_connector.r1_oauth_refresh_execution_owner import R1OAuthRefreshSnapshot
+from bitrix_connector.r1_oauth_refresh_internal_endpoint import (
+    R1_OAUTH_REFRESH_INTERNAL_PATH,
+)
 from bitrix_connector.r1_oauth_refresh_internal_router import (
     R1OAuthRefreshInternalRouterBindings,
     create_r1_oauth_refresh_internal_router,
@@ -78,17 +81,21 @@ class R1OAuthRefreshInternalRouterTests(unittest.TestCase):
 
     def test_valid_bearer_delegates_once(self):
         response = self.client.post(
-            "/r1/oauth-refresh", headers={"Authorization": f"Bearer {self.token}"}
+            R1_OAUTH_REFRESH_INTERNAL_PATH,
+            headers={"Authorization": f"Bearer {self.token}"},
         )
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["state"], "READY")
         self.assertEqual(self.calls, 1)
 
     def test_missing_or_invalid_bearer_never_invokes_executor(self):
-        self.assertEqual(self.client.post("/r1/oauth-refresh").status_code, 401)
+        self.assertEqual(
+            self.client.post(R1_OAUTH_REFRESH_INTERNAL_PATH).status_code, 401
+        )
         self.assertEqual(
             self.client.post(
-                "/r1/oauth-refresh", headers={"Authorization": "Bearer invalid"}
+                R1_OAUTH_REFRESH_INTERNAL_PATH,
+                headers={"Authorization": "Bearer invalid"},
             ).status_code,
             401,
         )

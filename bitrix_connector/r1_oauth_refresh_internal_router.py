@@ -11,6 +11,7 @@ from fastapi import APIRouter, HTTPException, Request
 from .r1_oauth_refresh_execution_owner import R1OAuthRefreshSnapshot, R1_OAUTH_REFRESH_CONFIRMATION
 from .r1_oauth_refresh_internal_endpoint import (
     EndpointExecutor,
+    R1_OAUTH_REFRESH_INTERNAL_PATH,
     authenticate_and_invoke_r1_oauth_refresh_internal_endpoint_once,
     build_r1_oauth_refresh_internal_endpoint_plan,
 )
@@ -35,7 +36,7 @@ def create_r1_oauth_refresh_internal_router(
         raise TypeError("r1_internal_router_bindings_required")
     router = APIRouter()
 
-    @router.post("/r1/oauth-refresh")
+    @router.post(R1_OAUTH_REFRESH_INTERNAL_PATH)
     async def refresh_once(request: Request) -> dict[str, object]:
         authorization = request.headers.get("authorization", "")
         if not authorization.startswith("Bearer "):
