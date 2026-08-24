@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from typing import Any
 from urllib.request import urlopen
 
-from .r1_oauth_refresh_execution_owner import R1OAuthRefreshSnapshot
+from .r1_oauth_refresh_execution_owner import execute_r1_oauth_refresh_protected_once
 from .r1_oauth_refresh_internal_router import R1OAuthRefreshInternalRouterBindings
 from .r1_oauth_refresh_workload_identity_auth import (
     build_r1_internal_workload_identity_policy,
@@ -61,12 +61,6 @@ def _load_jwks_once(uri: str) -> Mapping[str, Mapping[str, object]]:
     }
 
 
-async def _unbound_executor() -> R1OAuthRefreshSnapshot:
-    """Impide por diseño que este montaje ejecute OAuth o Key Vault."""
-
-    return R1OAuthRefreshSnapshot(reason="r1_oauth_refresh_owner_unbound")
-
-
 def build_r1_oauth_refresh_host_bindings() -> R1OAuthRefreshHostBindingResult:
     """Construye el allowlist; falla cerrado sin listar ni revelar valores."""
 
@@ -86,7 +80,7 @@ def build_r1_oauth_refresh_host_bindings() -> R1OAuthRefreshHostBindingResult:
             policy=policy,
             jwks_by_kid={},
             jwks_resolver=lambda: _load_jwks_once(jwks_uri),
-            executor=_unbound_executor,
+            executor=execute_r1_oauth_refresh_protected_once,
         ),
         "ready",
     )
