@@ -124,12 +124,7 @@ from response_engine import (
 )
 from optional_bitrix_connector import mount_optional_bitrix_connector
 from optional_wazzup_r0_ingress import mount_optional_wazzup_r0_ingress
-from bitrix_connector.r1_oauth_refresh_host_bindings import (
-    build_r1_oauth_refresh_host_bindings,
-)
-from bitrix_connector.r1_oauth_refresh_internal_mount import (
-    mount_r1_oauth_refresh_internal_router,
-)
+from optional_r1_oauth_refresh_internal import mount_optional_r1_oauth_refresh_internal
 
 
 # ─────────────────────────────────────────────────────────────
@@ -204,17 +199,9 @@ logger.info(
     "Wazzup R0 ingress status: %s",
     wazzup_r0_ingress_mount.status.value,
 )
-r1_oauth_refresh_host_bindings = build_r1_oauth_refresh_host_bindings()
-if r1_oauth_refresh_host_bindings.bindings is None:
-    app.state.r1_oauth_refresh_internal_status = r1_oauth_refresh_host_bindings.reason
-    logger.info("R1 OAuth refresh internal route: %s", r1_oauth_refresh_host_bindings.reason)
-else:
-    r1_oauth_refresh_mount = mount_r1_oauth_refresh_internal_router(
-        app,
-        bindings=r1_oauth_refresh_host_bindings.bindings,
-    )
-    app.state.r1_oauth_refresh_internal_status = r1_oauth_refresh_mount.reason
-    logger.info("R1 OAuth refresh internal route: %s", r1_oauth_refresh_mount.reason)
+r1_oauth_refresh_mount = mount_optional_r1_oauth_refresh_internal(app, logger=logger)
+app.state.r1_oauth_refresh_internal_status = r1_oauth_refresh_mount.reason
+logger.info("R1 OAuth refresh internal route: %s", r1_oauth_refresh_mount.reason)
 
 
 @app.on_event("startup")
