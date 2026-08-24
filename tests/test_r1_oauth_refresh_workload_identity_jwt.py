@@ -71,7 +71,8 @@ class R1WorkloadIdentityJwtTests(unittest.TestCase):
 
     def test_rejects_tampered_signature_or_wrong_authorized_client(self):
         token = _token(self.private_key, self._claims())
-        tampered = token[:-1] + ("A" if token[-1] != "A" else "B")
+        signed, signature = token.rsplit(".", 1)
+        tampered = f"{signed}.{'A' if signature[0] != 'A' else 'B'}{signature[1:]}"
         self.assertIsNone(
             verify_r1_workload_identity_jwt_once(
                 tampered, policy=self.policy, jwks_by_kid=self.jwks, now=self.now
