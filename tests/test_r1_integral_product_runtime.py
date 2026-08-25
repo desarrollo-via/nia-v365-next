@@ -337,7 +337,7 @@ class R1IntegralProductRuntimeTests(unittest.IsolatedAsyncioTestCase):
             activation_runner_factory=activation_runner,
         )
         runner = R1ResultEaorProductLauncher(
-            current_day="2026-08-14"
+            current_day="2026-08-25"
         ).build_runner_from_binding_once(
             acceptance=EAOR_ACCEPTANCE, binding=binding
         )

@@ -106,7 +106,7 @@ class R1ResultEaorProductRunnerTests(unittest.IsolatedAsyncioTestCase):
     async def test_launcher_to_port_to_coordinator_completes_with_doubles(self):
         harness = ProductHarness()
         runner = R1ResultEaorProductLauncher(
-            current_day="2026-08-13"
+            current_day="2026-08-25"
         ).build_runner_once(
             acceptance=EAOR_ACCEPTANCE,
             factories=harness.factories(),
@@ -144,7 +144,7 @@ class R1ResultEaorProductRunnerTests(unittest.IsolatedAsyncioTestCase):
     async def test_close_at_attention_restores_session_then_activation(self):
         harness = ProductHarness()
         runner = R1ResultEaorProductLauncher(
-            current_day="2026-08-13"
+            current_day="2026-08-25"
         ).build_runner_once(
             acceptance=EAOR_ACCEPTANCE,
             factories=harness.factories(),
@@ -176,11 +176,11 @@ class R1ResultEaorProductRunnerTests(unittest.IsolatedAsyncioTestCase):
         )
         with self.assertRaisesRegex(RuntimeError, "acceptance_invalid"):
             R1ResultEaorProductLauncher(
-                current_day="2026-08-13"
+                current_day="2026-08-25"
             ).build_runner_once(acceptance="wrong", factories=factories)
         with self.assertRaisesRegex(RuntimeError, "contract_expired"):
             R1ResultEaorProductLauncher(
-                current_day="2026-08-15"
+                current_day="2026-08-26"
             ).build_runner_once(
                 acceptance=EAOR_ACCEPTANCE,
                 factories=factories,
@@ -190,7 +190,7 @@ class R1ResultEaorProductRunnerTests(unittest.IsolatedAsyncioTestCase):
     async def test_close_failure_keeps_remainder_and_attempts_activation_restore(self):
         harness = ProductHarness(participant_restored=False)
         runner = R1ResultEaorProductLauncher(
-            current_day="2026-08-13"
+            current_day="2026-08-25"
         ).build_runner_once(
             acceptance=EAOR_ACCEPTANCE,
             factories=harness.factories(),
@@ -209,7 +209,7 @@ class R1ResultEaorProductRunnerTests(unittest.IsolatedAsyncioTestCase):
     async def test_runner_is_one_shot_and_repr_is_redacted(self):
         harness = ProductHarness()
         runner = R1ResultEaorProductLauncher(
-            current_day="2026-08-13"
+            current_day="2026-08-25"
         ).build_runner_once(
             acceptance=EAOR_ACCEPTANCE,
             factories=harness.factories(),
@@ -229,7 +229,7 @@ class R1ResultEaorProductRunnerTests(unittest.IsolatedAsyncioTestCase):
 
         factories = replace(harness.factories(), runtime_finalizer=finalize)
         runner = R1ResultEaorProductLauncher(
-            current_day="2026-08-13"
+            current_day="2026-08-25"
         ).build_runner_once(
             acceptance=EAOR_ACCEPTANCE,
             factories=factories,
@@ -254,7 +254,7 @@ class R1ResultEaorProductRunnerTests(unittest.IsolatedAsyncioTestCase):
             runtime_finalizer=finalize,
         )
         runner = R1ResultEaorProductLauncher(
-            current_day="2026-08-13"
+            current_day="2026-08-25"
         ).build_runner_once(
             acceptance=EAOR_ACCEPTANCE,
             factories=factories,

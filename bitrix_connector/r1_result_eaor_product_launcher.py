@@ -66,7 +66,7 @@ INERT_PREFLIGHT_CONFIRMATION = (
 )
 POLL_INTERVAL_SECONDS = 15
 OBSERVATION_TIMEOUT_SECONDS = 600
-EAOR_CURRENT_DAYS = frozenset({"2026-08-13", "2026-08-14"})
+EAOR_CURRENT_DAYS = frozenset({"2026-08-25"})
 
 
 @dataclass(frozen=True)
@@ -157,7 +157,7 @@ class R1ResultEaorProductLauncher:
             )
         bindings_ok = _bindings_exact(self._bindings)
         scope_ok = bool(
-            EAOR_ID == "NIA-NEXT-R1-EAOR-INTEGRAL-2026-08-13-V2"
+            EAOR_ID == "NIA-NEXT-R1-EAOR-INTEGRAL-2026-08-25-V3"
             and MANIFEST_SHA256
             == "16EDAC107B1B8041952D8ED324C0542ECAADDB0AA7EC316C2B557F135864AA49"
             and PROTECTED_TARGET_ID == "nia-next/bitrix-r1/protected-settings/v1"
