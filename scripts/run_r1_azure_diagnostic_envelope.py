@@ -53,9 +53,12 @@ def _local_fingerprint(
         relative = raw_path.decode("utf-8", errors="surrogateescape").replace("\\", "/")
         if relative in excluded:
             continue
+        candidate = ROOT / relative
+        if not candidate.is_file():
+            continue
         digest.update(raw_path)
         digest.update(b"\0")
-        digest.update((ROOT / relative).read_bytes())
+        digest.update(candidate.read_bytes())
         digest.update(b"\0")
     return digest.hexdigest()
 
