@@ -173,7 +173,7 @@ class R1ResultEaorProductRealBindingTests(unittest.IsolatedAsyncioTestCase):
         harness = BindingHarness()
         binding = R1ResultEaorProductRealBinding(runtime=harness.runtime())
         runner = R1ResultEaorProductLauncher(
-            current_day="2026-08-13"
+            current_day="2026-08-25"
         ).build_runner_from_binding_once(
             acceptance=EAOR_ACCEPTANCE,
             binding=binding,
@@ -184,7 +184,7 @@ class R1ResultEaorProductRealBindingTests(unittest.IsolatedAsyncioTestCase):
     async def test_full_binding_chain_completes_with_only_doubles(self):
         harness = BindingHarness()
         runner = R1ResultEaorProductLauncher(
-            current_day="2026-08-13"
+            current_day="2026-08-25"
         ).build_runner_from_binding_once(
             acceptance=EAOR_ACCEPTANCE,
             binding=R1ResultEaorProductRealBinding(runtime=harness.runtime()),
@@ -214,7 +214,7 @@ class R1ResultEaorProductRealBindingTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(binding.preview().state, "NO-GO-BINDING-DRIFT")
         with self.assertRaisesRegex(RuntimeError, "reused_or_drifted"):
             R1ResultEaorProductLauncher(
-                current_day="2026-08-13"
+                current_day="2026-08-25"
             ).build_runner_from_binding_once(
                 acceptance=EAOR_ACCEPTANCE,
                 binding=binding,

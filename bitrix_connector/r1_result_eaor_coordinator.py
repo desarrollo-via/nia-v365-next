@@ -6,9 +6,9 @@ from dataclasses import dataclass
 from typing import Literal, Protocol
 
 
-EAOR_ID = "NIA-NEXT-R1-EAOR-INTEGRAL-2026-08-13-V2"
+EAOR_ID = "NIA-NEXT-R1-EAOR-INTEGRAL-2026-08-25-V3"
 EAOR_ACCEPTANCE = (
-    "7D178AF95FCA3AC6EDA534CAFEAB136B7935316661A117CA2ADC2476985FA66B"
+    "436DA738DD6986F1FF3274A3FFEDBB6019AB794273034337D4741D53C756C23C"
 )
 
 StageState = Literal[
@@ -60,7 +60,7 @@ class R1EaorPort(Protocol):
 class R1ResultEaorSnapshot:
     state: EaorState = "INERT"
     eaor_id: Literal[
-        "NIA-NEXT-R1-EAOR-INTEGRAL-2026-08-13-V2"
+        "NIA-NEXT-R1-EAOR-INTEGRAL-2026-08-25-V3"
     ] = EAOR_ID
     acceptance_calls: int = 0
     provisioning_calls: int = 0

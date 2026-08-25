@@ -14,7 +14,7 @@ from scripts.run_r1_result_eaor_product_preflight import main
 class R1ResultEaorProductLauncherTests(unittest.TestCase):
     def test_exact_preflight_is_ready_and_performs_zero_effects(self):
         result = R1ResultEaorProductLauncher(
-            current_day="2026-08-13"
+            current_day="2026-08-25"
         ).preflight_once(
             confirmation=INERT_PREFLIGHT_CONFIRMATION
         )
@@ -34,12 +34,12 @@ class R1ResultEaorProductLauncherTests(unittest.TestCase):
 
     def test_successor_day_is_current_and_following_day_requires_refresh(self):
         result = R1ResultEaorProductLauncher(
-            current_day="2026-08-14"
+            current_day="2026-08-25"
         ).preflight_once(confirmation=INERT_PREFLIGHT_CONFIRMATION)
         self.assertEqual(result.state, "READY-EXTERNAL-PREFLIGHT")
         self.assertTrue(result.external_envelope_current)
         expired = R1ResultEaorProductLauncher(
-            current_day="2026-08-15"
+            current_day="2026-08-26"
         ).preflight_once(confirmation=INERT_PREFLIGHT_CONFIRMATION)
         self.assertEqual(expired.state, "READY-CONTRACT-REFRESH")
         self.assertFalse(expired.external_envelope_current)
@@ -64,7 +64,7 @@ class R1ResultEaorProductLauncherTests(unittest.TestCase):
         self.assertEqual(result.owner_constructions, 0)
 
     def test_preflight_is_one_shot_and_repr_is_redacted(self):
-        launcher = R1ResultEaorProductLauncher(current_day="2026-08-13")
+        launcher = R1ResultEaorProductLauncher(current_day="2026-08-25")
         self.assertEqual(
             repr(launcher), "R1ResultEaorProductLauncher(<redacted>)"
         )
@@ -78,7 +78,7 @@ class R1ResultEaorProductLauncherTests(unittest.TestCase):
             code = main(
                 ["--confirm-code", INERT_PREFLIGHT_CONFIRMATION],
                 launcher_factory=lambda: R1ResultEaorProductLauncher(
-                    current_day="2026-08-13"
+                    current_day="2026-08-25"
                 ),
             )
         payload = json.loads(output.getvalue())
