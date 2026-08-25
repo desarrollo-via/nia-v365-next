@@ -9,6 +9,9 @@ from .r1_oauth_refresh_internal_router import (
     R1OAuthRefreshInternalRouterBindings,
     create_r1_oauth_refresh_internal_router,
 )
+from .r1_oauth_refresh_host_trigger import (
+    create_r1_oauth_refresh_host_trigger_router,
+)
 
 
 _MOUNTED_ATTRIBUTE = "_nia_r1_oauth_refresh_internal_router_mounted"
@@ -32,6 +35,9 @@ def mount_r1_oauth_refresh_internal_router(
     if getattr(app, _MOUNTED_ATTRIBUTE, False):
         return R1OAuthRefreshInternalMountResult(False, "already_mounted")
     app.include_router(create_r1_oauth_refresh_internal_router(bindings))
+    app.include_router(
+        create_r1_oauth_refresh_host_trigger_router(app, bindings=bindings)
+    )
     setattr(app, _MOUNTED_ATTRIBUTE, True)
     return R1OAuthRefreshInternalMountResult(True, "mounted")
 
