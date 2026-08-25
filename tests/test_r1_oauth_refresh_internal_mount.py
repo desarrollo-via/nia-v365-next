@@ -6,6 +6,9 @@ from fastapi.testclient import TestClient
 
 from bitrix_connector.r1_oauth_refresh_execution_owner import R1OAuthRefreshSnapshot
 from bitrix_connector.r1_oauth_refresh_internal_endpoint import R1_OAUTH_REFRESH_INTERNAL_PATH
+from bitrix_connector.r1_oauth_refresh_host_trigger import (
+    R1_OAUTH_REFRESH_HOST_TRIGGER_PATH,
+)
 from bitrix_connector.r1_oauth_refresh_internal_mount import (
     mount_r1_oauth_refresh_internal_router,
 )
@@ -44,6 +47,11 @@ class R1OAuthRefreshInternalMountTests(unittest.TestCase):
     def test_exact_route_rejects_anonymous_request_without_owner(self):
         response = self.client.post(R1_OAUTH_REFRESH_INTERNAL_PATH)
         self.assertTrue(self.result.mounted)
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(self.calls, 0)
+
+    def test_host_trigger_rejects_anonymous_request_without_identity_or_owner(self):
+        response = self.client.post(R1_OAUTH_REFRESH_HOST_TRIGGER_PATH)
         self.assertEqual(response.status_code, 401)
         self.assertEqual(self.calls, 0)
 
