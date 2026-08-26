@@ -18,6 +18,9 @@ from .r1_oauth_refresh_internal_router import R1OAuthRefreshInternalRouterBindin
 from .r1_oauth_refresh_workload_identity_auth import (
     build_r1_internal_workload_identity_policy,
 )
+from .r1_post_write_close_host_binding import (
+    build_r1_post_write_persistent_host_executor,
+)
 
 
 R1_OAUTH_REFRESH_ISSUER_SETTING = "R1_OAUTH_REFRESH_ISSUER"
@@ -36,6 +39,7 @@ R1_OAUTH_REFRESH_HOST_SETTING_ALLOWLIST = (
 class R1OAuthRefreshHostBindingResult:
     bindings: R1OAuthRefreshInternalRouterBindings | None
     reason: str
+    post_write_close_executor: object | None = None
 
 
 def _read_required_setting(name: str) -> str | None:
@@ -83,6 +87,7 @@ def build_r1_oauth_refresh_host_bindings() -> R1OAuthRefreshHostBindingResult:
             executor=execute_r1_oauth_refresh_protected_once,
         ),
         "ready",
+        build_r1_post_write_persistent_host_executor(),
     )
 
 

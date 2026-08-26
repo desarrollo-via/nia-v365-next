@@ -12,6 +12,9 @@ from .r1_oauth_refresh_internal_router import (
 from .r1_oauth_refresh_host_trigger import (
     create_r1_oauth_refresh_host_trigger_router,
 )
+from .r1_post_write_close_host_trigger import (
+    create_r1_post_write_close_host_trigger_router,
+)
 
 
 _MOUNTED_ATTRIBUTE = "_nia_r1_oauth_refresh_internal_router_mounted"
@@ -27,6 +30,7 @@ def mount_r1_oauth_refresh_internal_router(
     app: Any,
     *,
     bindings: R1OAuthRefreshInternalRouterBindings,
+    post_write_close_executor=None,
 ) -> R1OAuthRefreshInternalMountResult:
     """Monta sólo bindings inyectados; no lee configuración ni secretos."""
 
@@ -38,6 +42,11 @@ def mount_r1_oauth_refresh_internal_router(
     app.include_router(
         create_r1_oauth_refresh_host_trigger_router(app, bindings=bindings)
     )
+    if post_write_close_executor is not None:
+        app.include_router(create_r1_post_write_close_host_trigger_router(
+            auth_bindings=bindings,
+            executor=post_write_close_executor,
+        ))
     setattr(app, _MOUNTED_ATTRIBUTE, True)
     return R1OAuthRefreshInternalMountResult(True, "mounted")
 
