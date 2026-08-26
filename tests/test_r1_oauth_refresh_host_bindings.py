@@ -27,6 +27,7 @@ class R1OAuthRefreshHostBindingsTests(unittest.TestCase):
         self.assertEqual(result.reason, "ready")
         self.assertIsNotNone(result.bindings)
         self.assertEqual(result.bindings.policy.audience, "api://r1-audience")
+        self.assertTrue(callable(result.post_write_close_executor))
 
 
 if __name__ == "__main__":

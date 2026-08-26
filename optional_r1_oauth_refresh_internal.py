@@ -40,7 +40,13 @@ def mount_optional_r1_oauth_refresh_internal(
         binding_result = build_bindings()
         if binding_result.bindings is None:
             return OptionalR1OAuthRefreshInternalResult(False, binding_result.reason)
-        mount_result = mount_router(app, bindings=binding_result.bindings)
+        mount_result = mount_router(
+            app,
+            bindings=binding_result.bindings,
+            post_write_close_executor=(
+                binding_result.post_write_close_executor
+            ),
+        )
         return OptionalR1OAuthRefreshInternalResult(mount_result.mounted, mount_result.reason)
     except Exception as exc:
         if logger is not None:

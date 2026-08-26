@@ -55,6 +55,30 @@ class R1OAuthRefreshInternalMountTests(unittest.TestCase):
         self.assertEqual(response.status_code, 401)
         self.assertEqual(self.calls, 0)
 
+    def test_post_write_trigger_mount_is_explicit_and_anonymous_401(self):
+        async def close_executor():
+            raise AssertionError("recovery must not run")
+
+        app = FastAPI()
+        result = mount_r1_oauth_refresh_internal_router(
+            app,
+            bindings=R1OAuthRefreshInternalRouterBindings(
+                policy=build_r1_internal_workload_identity_policy(
+                    issuer="issuer-fixture",
+                    audience="audience-fixture",
+                    authorized_client_id="client-fixture",
+                ),
+                jwks_by_kid={},
+                executor=lambda: None,  # type: ignore[arg-type]
+            ),
+            post_write_close_executor=close_executor,
+        )
+        response = TestClient(app).post(
+            "/bitrix-connector/r1/post-write-close/trigger"
+        )
+        self.assertTrue(result.mounted)
+        self.assertEqual(response.status_code, 401)
+
     def test_mount_is_idempotent(self):
         result = mount_r1_oauth_refresh_internal_router(
             self.app,
