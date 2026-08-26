@@ -18,6 +18,8 @@ class R1InternalWorkloadIdentityPolicy:
     audience: str
     authorized_client_id: str
     maximum_token_age_seconds: int = 300
+    alternate_issuer: str | None = None
+    allow_appid_client_claim: bool = False
 
 
 @dataclass(frozen=True)
@@ -34,7 +36,10 @@ class R1ValidatedWorkloadIdentity:
 
 
 def build_r1_internal_workload_identity_policy(
-    *, issuer: str, audience: str, authorized_client_id: str
+    *, issuer: str, audience: str, authorized_client_id: str,
+    maximum_token_age_seconds: int = 300,
+    alternate_issuer: str | None = None,
+    allow_appid_client_claim: bool = False,
 ) -> R1InternalWorkloadIdentityPolicy:
     """Construye una política explícita sin cargar secretos ni App Settings."""
 
@@ -42,6 +47,9 @@ def build_r1_internal_workload_identity_policy(
         issuer=issuer,
         audience=audience,
         authorized_client_id=authorized_client_id,
+        maximum_token_age_seconds=maximum_token_age_seconds,
+        alternate_issuer=alternate_issuer,
+        allow_appid_client_claim=allow_appid_client_claim,
     )
 
 
@@ -72,7 +80,10 @@ def validate_r1_internal_workload_identity_once(
         )
         or policy.maximum_token_age_seconds <= 0
         or identity.signature_validated is not True
-        or identity.issuer != policy.issuer
+        or identity.issuer not in tuple(
+            value for value in (policy.issuer, policy.alternate_issuer)
+            if type(value) is str and value
+        )
         or identity.audience != policy.audience
         or identity.client_id != policy.authorized_client_id
         or identity.authenticated_at.tzinfo is None

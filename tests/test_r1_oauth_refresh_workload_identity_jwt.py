@@ -102,6 +102,49 @@ class R1WorkloadIdentityJwtTests(unittest.TestCase):
                 now=self.now,
             )
         )
+
+    def test_managed_identity_v1_claims_require_explicit_policy(self):
+        claims = self._claims(
+            iss="https://sts.windows.net/tenant/",
+            appid="client-fixture",
+            iat=int((self.now - timedelta(hours=1)).timestamp()),
+            exp=int((self.now + timedelta(hours=1)).timestamp()),
+        )
+        claims.pop("azp")
+        token = _token(self.private_key, claims)
+        self.assertIsNone(verify_r1_workload_identity_jwt_once(
+            token, policy=self.policy, jwks_by_kid=self.jwks, now=self.now
+        ))
+        managed_identity_policy = build_r1_internal_workload_identity_policy(
+            issuer="https://login.microsoftonline.com/tenant/v2.0",
+            alternate_issuer="https://sts.windows.net/tenant/",
+            audience="audience-fixture",
+            authorized_client_id="client-fixture",
+            maximum_token_age_seconds=86_400,
+            allow_appid_client_claim=True,
+        )
+        identity = verify_r1_workload_identity_jwt_once(
+            token,
+            policy=managed_identity_policy,
+            jwks_by_kid=self.jwks,
+            now=self.now,
+        )
+        self.assertIsNotNone(identity)
+        self.assertEqual(identity.client_id, "client-fixture")
+
+    def test_rejects_conflicting_azp_and_appid(self):
+        policy = build_r1_internal_workload_identity_policy(
+            issuer="issuer-fixture",
+            audience="audience-fixture",
+            authorized_client_id="client-fixture",
+            allow_appid_client_claim=True,
+        )
+        self.assertIsNone(verify_r1_workload_identity_jwt_once(
+            _token(self.private_key, self._claims(appid="other-client")),
+            policy=policy,
+            jwks_by_kid=self.jwks,
+            now=self.now,
+        ))
         self.assertIsNone(
             verify_r1_workload_identity_jwt_once(
                 _token(

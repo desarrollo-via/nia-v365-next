@@ -12,6 +12,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 from urllib.request import urlopen
+from urllib.parse import urlparse
 
 from .r1_oauth_refresh_execution_owner import execute_r1_oauth_refresh_protected_once
 from .r1_oauth_refresh_internal_router import R1OAuthRefreshInternalRouterBindings
@@ -33,6 +34,26 @@ R1_OAUTH_REFRESH_HOST_SETTING_ALLOWLIST = (
     R1_OAUTH_REFRESH_AUTHORIZED_CLIENT_ID_SETTING,
     R1_OAUTH_REFRESH_JWKS_URI_SETTING,
 )
+MANAGED_IDENTITY_MAX_TOKEN_AGE_SECONDS = 86_400
+
+
+def _managed_identity_v1_issuer(v2_issuer: str) -> str | None:
+    try:
+        parsed = urlparse(v2_issuer)
+    except ValueError:
+        return None
+    parts = tuple(part for part in parsed.path.split("/") if part)
+    if (
+        parsed.scheme != "https"
+        or parsed.netloc != "login.microsoftonline.com"
+        or len(parts) != 2
+        or parts[1] != "v2.0"
+    ):
+        return None
+    tenant = parts[0]
+    if not tenant or any(character not in "0123456789abcdefABCDEF-" for character in tenant):
+        return None
+    return f"https://sts.windows.net/{tenant}/"
 
 
 @dataclass(frozen=True)
@@ -74,10 +95,18 @@ def build_r1_oauth_refresh_host_bindings() -> R1OAuthRefreshHostBindingResult:
     jwks_uri = values[R1_OAUTH_REFRESH_JWKS_URI_SETTING]
     if not (jwks_uri.startswith("https://login.microsoftonline.com/") and jwks_uri.endswith("/discovery/v2.0/keys")):
         return R1OAuthRefreshHostBindingResult(None, "jwks_uri_rejected")
+    alternate_issuer = _managed_identity_v1_issuer(
+        values[R1_OAUTH_REFRESH_ISSUER_SETTING]
+    )
+    if alternate_issuer is None:
+        return R1OAuthRefreshHostBindingResult(None, "issuer_rejected")
     policy = build_r1_internal_workload_identity_policy(
         issuer=values[R1_OAUTH_REFRESH_ISSUER_SETTING],
         audience=values[R1_OAUTH_REFRESH_AUDIENCE_SETTING],
         authorized_client_id=values[R1_OAUTH_REFRESH_AUTHORIZED_CLIENT_ID_SETTING],
+        maximum_token_age_seconds=MANAGED_IDENTITY_MAX_TOKEN_AGE_SECONDS,
+        alternate_issuer=alternate_issuer,
+        allow_appid_client_claim=True,
     )
     return R1OAuthRefreshHostBindingResult(
         R1OAuthRefreshInternalRouterBindings(
