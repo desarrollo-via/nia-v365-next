@@ -109,8 +109,18 @@ def verify_r1_workload_identity_jwt_once(
     except (InvalidSignature, UnicodeEncodeError):
         return None
 
-    expected = ("iss", "aud", "azp", "sub")
+    expected = ("iss", "aud", "sub")
     if any(type(claims.get(name)) is not str for name in expected):
+        return None
+    azp = claims.get("azp")
+    appid = claims.get("appid")
+    if type(azp) is str:
+        if type(appid) is str and appid != azp:
+            return None
+        client_id = azp
+    elif policy.allow_appid_client_claim is True and type(appid) is str:
+        client_id = appid
+    else:
         return None
     issued_at = claims.get("iat")
     expires_at = claims.get("exp")
@@ -123,9 +133,12 @@ def verify_r1_workload_identity_jwt_once(
         return None
     now_utc = now.astimezone(timezone.utc)
     if (
-        claims["iss"] != policy.issuer
+        claims["iss"] not in tuple(
+            value for value in (policy.issuer, policy.alternate_issuer)
+            if type(value) is str and value
+        )
         or claims["aud"] != policy.audience
-        or claims["azp"] != policy.authorized_client_id
+        or client_id != policy.authorized_client_id
         or not claims["sub"].strip()
         or authenticated_at > now_utc
         or now_utc > expires
@@ -136,7 +149,7 @@ def verify_r1_workload_identity_jwt_once(
     return R1ValidatedWorkloadIdentity(
         issuer=claims["iss"],
         audience=claims["aud"],
-        client_id=claims["azp"],
+        client_id=client_id,
         subject=claims["sub"],
         authenticated_at=authenticated_at,
         expires_at=expires,
