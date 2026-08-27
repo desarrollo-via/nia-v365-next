@@ -124,6 +124,7 @@ from response_engine import (
 )
 from optional_bitrix_connector import mount_optional_bitrix_connector
 from optional_wazzup_r0_ingress import mount_optional_wazzup_r0_ingress
+from h1_visible import create_h1_visible_router
 
 
 # ─────────────────────────────────────────────────────────────
@@ -172,6 +173,7 @@ limiter = Limiter(key_func=get_remote_address)
 
 app = FastAPI(title="NIA — Asistente Comercial ViaIndustrial")
 app.state.limiter = limiter
+app.include_router(create_h1_visible_router(), prefix="/bitrix-connector")
 
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 app.add_middleware(
