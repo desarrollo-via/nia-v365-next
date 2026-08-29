@@ -14,6 +14,7 @@ from .models import (
     ConnectorHealth,
     WebhookReceipt,
 )
+from .h1_visible import create_h1_visible_router, h1_visible_buffer
 from .openline_r0_bridge_mount import (
     R0_BRIDGE_EMBEDDED_PREFIX,
     mount_optional_r0_bridge_fail_isolated,
@@ -56,6 +57,7 @@ router.include_router(
     )
 )
 router.include_router(create_audit_router())
+router.include_router(create_h1_visible_router())
 embedded_r0_bridge_mount = mount_optional_r0_bridge_fail_isolated(
     router,
     load_settings(),
@@ -65,6 +67,17 @@ event_scoped_r1_mount = mount_optional_event_scoped_r1_with_pre_event_binding(
     router,
     load_settings(),
 )
+
+
+async def observe_inert_receipt(event, receipt, settings) -> None:
+    """Aisla los observadores pasivos; ninguno puede bloquear al webhook."""
+    for observer in (embedded_r0_bridge_mount.receipt_observer, h1_visible_buffer.observe):
+        if observer is None:
+            continue
+        try:
+            await observer(event, receipt, settings)
+        except Exception:
+            pass
 
 
 async def start_connector_runtime() -> None:
@@ -128,6 +141,6 @@ async def bitrix_webhook(request: Request):
         request,
         settings_loader=load_settings,
         runtime=connector_runtime,
-        receipt_observer=embedded_r0_bridge_mount.receipt_observer,
+        receipt_observer=observe_inert_receipt,
         protected_oauth_observer=event_scoped_r1_mount.observer,
     )
